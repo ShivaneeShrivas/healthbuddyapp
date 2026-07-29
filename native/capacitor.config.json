@@ -1,0 +1,12 @@
+{
+  "appId": "app.healthbuddy",
+  "appName": "HealthBuddy",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#1C1526"
+  },
+  "server": {
+    "url": "https://YOUR-APP-NAME.onrender.com",
+    "cleartext": false
+  }
+}

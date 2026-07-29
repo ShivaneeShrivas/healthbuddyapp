@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C1526">
+<title>HealthBuddy — your friendly health nudge companion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<link rel="manifest" href="/static/manifest.json">
+</head>
+<body>
+<div id="app" class="app-shell">
+  <main id="screen" class="screen" tabindex="-1"><!-- views render here --></main>
+  <nav id="tabbar" class="tabbar hidden" aria-label="Main navigation">
+    <button class="tab" data-route="home"  aria-label="Home"><span class="tab-ico">🏠</span><span>Home</span></button>
+    <button class="tab" data-route="nudges" aria-label="Nudges"><span class="tab-ico">✨</span><span>Nudges</span></button>
+    <button class="tab" data-route="explore" aria-label="Explore"><span class="tab-ico">📚</span><span>Explore</span></button>
+    <button class="tab" data-route="play" aria-label="Play"><span class="tab-ico">🎮</span><span>Play</span></button>
+    <button class="tab" data-route="challenges" aria-label="Challenges"><span class="tab-ico">🏆</span><span>Challenges</span></button>
+    <button class="tab" data-route="profile" aria-label="Profile"><span class="tab-ico">🙂</span><span>Profile</span></button>
+  </nav>
+  <div id="toast-zone" class="toast-zone" aria-live="polite"></div>
+  <div id="modal-zone"></div>
+</div>
+<script src="/static/providers.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/features.js"></script>
+<script>if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
+</body>
+</html>

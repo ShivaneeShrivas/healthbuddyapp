@@ -1,0 +1,12 @@
+<!-- Paste these lines inside android/app/src/main/AndroidManifest.xml -->
+
+<!-- inside the <manifest> tag, next to the other <uses-permission> lines: -->
+<uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+    tools:ignore="ProtectedPermissions" />
+<!-- Required on Android 13+ (API 33+) for @capacitor/local-notifications to
+     actually show a notification — without this, the in-app "Enable"
+     toggle can succeed while the OS silently drops every notification. -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<!-- and make sure the <manifest> tag itself contains:
+     xmlns:tools="http://schemas.android.com/tools"                        -->

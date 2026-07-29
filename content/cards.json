@@ -1,0 +1,428 @@
+[
+{
+"category": "nutrition",
+"emoji": "🥕",
+"title": "Beetroot break?",
+"body": "A little beetroot goes a long way — great for blood flow and post-work energy. Grab some from the salad counter today?",
+"action_label": "I'll grab some",
+"deep_dive": "Beetroot is rich in dietary nitrates, which your body converts to nitric oxide — a compound that relaxes blood vessels and improves blood flow. Studies link it to better stamina and even sharper focus. Roasted, juiced, or straight from the salad bar, a few slices a day is plenty."
+},
+{
+"category": "nutrition",
+"emoji": "🍌",
+"title": "Banana before class",
+"body": "Running to an early class or meeting on an empty stomach? A banana takes 10 seconds to eat and keeps your brain fed till lunch.",
+"action_label": "Done"
+},
+{
+"category": "nutrition",
+"emoji": "🥜",
+"title": "Pocket protein",
+"body": "Keep a small box of peanuts or chana at your desk. Way better than the 4 PM chips run, and your future self will thank you.",
+"action_label": "Stocked up"
+},
+{
+"category": "nutrition",
+"emoji": "🍊",
+"title": "One fruit today",
+"body": "Just one piece of fruit today — that's the whole mission. Orange, guava, whatever the canteen has. Easy win.",
+"action_label": "Fruit acquired"
+},
+{
+"category": "nutrition",
+"emoji": "🥗",
+"title": "Add one green thing",
+"body": "Next meal, add one green thing to your plate. Doesn't matter what. Small habit, big compound interest.",
+"action_label": "Added it"
+},
+{
+"category": "nutrition",
+"emoji": "🍳",
+"title": "Protein check",
+"body": "Quick check: had any protein today? Eggs, dal, paneer, curd — pick one for your next meal and you're sorted.",
+"action_label": "On it"
+},
+{
+"category": "nutrition",
+"emoji": "🌾",
+"title": "Swap one refined carb",
+"body": "Try swapping white bread or maida for roti or oats just once today. Steadier energy, fewer crashes during study sessions.",
+"action_label": "Swapped"
+},
+{
+"category": "nutrition",
+"emoji": "🥛",
+"title": "Curd is a cheat code",
+"body": "A bowl of curd with lunch = probiotics, protein, and it cools you down. Triple win, zero effort.",
+"action_label": "Curd it is"
+},
+{
+"category": "nutrition",
+"emoji": "🍫",
+"title": "Craving something sweet?",
+"body": "Totally fine! Try dates or a small piece of dark chocolate first — often that's all the craving actually wanted.",
+"action_label": "Tried it"
+},
+{
+"category": "nutrition",
+"emoji": "🥣",
+"title": "Don't skip breakfast day 3+",
+"body": "Skipping breakfast once is life. Skipping it all week is a focus tax. Even a quick poha counts — deal?",
+"action_label": "Deal"
+},
+{
+"category": "hydration",
+"emoji": "💧",
+"title": "Water break!",
+"body": "Hey, when did you last drink water? If you had to think about it, that's your answer. One glass, right now — I'll wait.",
+"action_label": "Glug glug, done"
+},
+{
+"category": "hydration",
+"emoji": "🚰",
+"title": "Bottle on the desk",
+"body": "Put a filled bottle on your desk before you start studying. You'll drink 2x more without even noticing. Science-ish, but mostly true.",
+"action_label": "Bottle placed"
+},
+{
+"category": "hydration",
+"emoji": "🧊",
+"title": "Post-lecture sip",
+"body": "Every time a class ends, drink some water before checking your phone. Sneaky little ritual, works great.",
+"action_label": "Sipped"
+},
+{
+"category": "hydration",
+"emoji": "☕",
+"title": "Chai ≠ water",
+"body": "That third cup of chai is doing a lot, but hydration isn't one of its main jobs. Chase it with a glass of water?",
+"action_label": "Chased it",
+"deep_dive": "Caffeinated drinks do contribute some fluid, but caffeine is a mild diuretic and tea often comes with sugar and milk that slow absorption. The simple rule: for every cup of chai or coffee, add a glass of plain water. Your kidneys, skin, and afternoon focus will all notice the difference."
+},
+{
+"category": "hydration",
+"emoji": "🌡️",
+"title": "Hot day protocol",
+"body": "Kanpur heat is not a joke. On hot days, aim for a glass every hour you're awake and moving. Headache prevention, basically free.",
+"action_label": "Hydrating"
+},
+{
+"category": "hydration",
+"emoji": "🍋",
+"title": "Bored of plain water?",
+"body": "Squeeze some lemon in it. Nimbu paani without the sugar mountain. Fancy hydration unlocked.",
+"action_label": "Fancy water made"
+},
+{
+"category": "hydration",
+"emoji": "💦",
+"title": "Morning glass first",
+"body": "Before the phone, before anything: one glass of water. You just went 7+ hours without any — your body's asking nicely.",
+"action_label": "First glass done"
+},
+{
+"category": "hydration",
+"emoji": "🎯",
+"title": "Halfway check",
+"body": "It's checkpoint time: are you at ~4 glasses yet today? If not, no stress — just have one now and you're back on track.",
+"action_label": "Back on track"
+},
+{
+"category": "hydration",
+"emoji": "🏸",
+"title": "Post-game refill",
+"body": "Played something today? Awesome. Now put back what you sweated out — two glasses minimum, champ.",
+"action_label": "Refilled"
+},
+{
+"category": "hydration",
+"emoji": "😵",
+"title": "Headache creeping in?",
+"body": "Before reaching for anything else, try a full glass of water and a 5-minute screen break. Mild dehydration is the sneakiest headache cause.",
+"action_label": "Trying it"
+},
+{
+"category": "movement",
+"emoji": "🚶",
+"title": "Two-minute walk",
+"body": "You've been sitting a while. Walk to the water cooler and back — that's it, that's the nudge. Your back will send a thank-you note.",
+"action_label": "Walked it"
+},
+{
+"category": "movement",
+"emoji": "🧎",
+"title": "Stretch break",
+"body": "Stand up, reach for the ceiling, touch your toes, roll your shoulders. 60 seconds. Your spine has been in an L-shape for 3 hours.",
+"action_label": "Stretched"
+},
+{
+"category": "movement",
+"emoji": "🚲",
+"title": "Cycle > auto today",
+"body": "Weather's decent — take the cycle to work or class instead? Free workout, and honestly usually faster across town.",
+"action_label": "Cycling it"
+},
+{
+"category": "movement",
+"emoji": "🏃",
+"title": "Evening loop",
+"body": "One loop around your block or a nearby park this evening. Music in, brain off. You always feel better after — you know this.",
+"action_label": "Loop done"
+},
+{
+"category": "movement",
+"emoji": "🪜",
+"title": "Stairs today",
+"body": "Lift's for luggage. Take the stairs today and collect some free cardio points. Your heart quietly high-fives you every time.",
+"action_label": "Climbed"
+},
+{
+"category": "movement",
+"emoji": "🧘",
+"title": "Desk squats, 10",
+"body": "Right where you're standing: 10 squats. Nobody's watching (and if they are, you look disciplined). Go!",
+"action_label": "Did 10"
+},
+{
+"category": "movement",
+"emoji": "⚽",
+"title": "Join the evening game",
+"body": "There's always a game happening in your neighbourhood in the evening. Show up once this week — fitness disguised as fun.",
+"action_label": "I'm in"
+},
+{
+"category": "movement",
+"emoji": "📱",
+"title": "Walking calls",
+"body": "Got a call to make? Make it a walking call. You'll cover a kilometre without noticing and sound more energetic too.",
+"action_label": "Walk-and-talked"
+},
+{
+"category": "movement",
+"emoji": "🌅",
+"title": "Morning stretch, 5 min",
+"body": "Before diving into the day, 5 minutes of stretching. Sets the tone, wakes up the joints, costs nothing.",
+"action_label": "Stretched",
+"deep_dive": "Morning stretching increases blood flow to muscles stiff from sleep, gently raises your heart rate, and signals your nervous system to shift into 'awake' mode. You don't need a routine — reach up, fold down, twist gently each side, roll the neck. Five minutes is enough to feel noticeably more alert."
+},
+{
+"category": "movement",
+"emoji": "🎧",
+"title": "One-song dance break",
+"body": "Study break idea: one song, full commitment, terrible dancing encouraged. Cardio + serotonin in 3 minutes flat.",
+"action_label": "Danced it out"
+},
+{
+"category": "sleep",
+"emoji": "😴",
+"title": "Screens down soon?",
+"body": "It's getting late. Screens off 30 minutes before bed = falling asleep way faster. The feed will still be there tomorrow, promise.",
+"action_label": "Winding down"
+},
+{
+"category": "sleep",
+"emoji": "🌙",
+"title": "Same time tonight",
+"body": "Try sleeping at roughly the same time as yesterday. Your body clock loves consistency more than it loves extra hours.",
+"action_label": "Will do",
+"deep_dive": "Your circadian rhythm is driven by consistency — going to bed and waking at similar times trains your body to release melatonin on schedule, so you fall asleep faster and wake up less groggy. An irregular schedule with the same total hours feels measurably worse than a regular one. Pick a window, protect it for a week, and feel the difference."
+},
+{
+"category": "sleep",
+"emoji": "☕",
+"title": "Caffeine curfew",
+"body": "Gentle reminder: chai or coffee after 6 PM is basically a bet against tonight's sleep. The house usually wins.",
+"action_label": "Skipping it"
+},
+{
+"category": "sleep",
+"emoji": "🛏️",
+"title": "Power nap, not coma nap",
+"body": "Napping? Set an alarm for 20–25 minutes. Any longer and you'll wake up in a different timezone, emotionally.",
+"action_label": "Alarm set"
+},
+{
+"category": "sleep",
+"emoji": "📵",
+"title": "Phone across the room",
+"body": "Tonight's experiment: charge your phone away from your bed. No 2 AM scroll spiral, and the morning alarm makes you actually get up.",
+"action_label": "Challenge accepted"
+},
+{
+"category": "sleep",
+"emoji": "🌡️",
+"title": "Cool room, deep sleep",
+"body": "A slightly cool room helps you sleep deeper. Fan on, light blanket — the classic combo exists for a reason.",
+"action_label": "Cooled down"
+},
+{
+"category": "sleep",
+"emoji": "🧠",
+"title": "Brain dump before bed",
+"body": "Mind racing with deadlines? Write tomorrow's to-dos on paper before bed. Your brain can stop rehearsing them once they're stored somewhere.",
+"action_label": "Dumped"
+},
+{
+"category": "sleep",
+"emoji": "⏰",
+"title": "7 hours is the floor",
+"body": "All-nighters feel productive but memory consolidation happens *during* sleep. Studying then sleeping beats studying instead of sleeping.",
+"action_label": "Noted"
+},
+{
+"category": "sleep",
+"emoji": "🌞",
+"title": "Morning light fix",
+"body": "Get 5 minutes of morning sunlight — balcony, walk to breakfast, anything. It anchors your body clock and tonight's sleep starts now.",
+"action_label": "Got my light"
+},
+{
+"category": "sleep",
+"emoji": "🎧",
+"title": "Wind-down soundtrack",
+"body": "Try a wind-down playlist or rain sounds for the last 15 minutes of the day. A little ritual that tells your brain: we're done.",
+"action_label": "Playing it"
+},
+{
+"category": "mindfulness",
+"emoji": "🫁",
+"title": "Three deep breaths",
+"body": "Right now: in for 4, hold for 4, out for 6. Three times. That's a system reset in under a minute.",
+"action_label": "Breathed",
+"deep_dive": "Slow exhales activate the parasympathetic nervous system — the 'rest and digest' mode — lowering heart rate and cortisol within a minute or two. The 4-4-6 pattern works because the extended exhale is what triggers the calming response. It's the fastest legal stress reliever available, and it's free."
+},
+{
+"category": "mindfulness",
+"emoji": "🧘",
+"title": "One mindful minute",
+"body": "Close your eyes for 60 seconds and just notice sounds around you. No goal, no app, no pressure. Tiny pause, real reset.",
+"action_label": "Paused"
+},
+{
+"category": "mindfulness",
+"emoji": "📝",
+"title": "Three good things",
+"body": "Quick: name three things that didn't suck today. Small counts. This little habit genuinely rewires how your day feels.",
+"action_label": "Named them"
+},
+{
+"category": "mindfulness",
+"emoji": "📴",
+"title": "Notification amnesty",
+"body": "Give yourself 30 notification-free minutes. Airplane mode, deep work or deep rest — your choice. The world will cope.",
+"action_label": "Going dark"
+},
+{
+"category": "mindfulness",
+"emoji": "🌳",
+"title": "Green minute",
+"body": "Campus has actual trees! Walk past some slowly. Looking at greenery for even a couple of minutes measurably lowers stress. Nature: OP.",
+"action_label": "Touched grass"
+},
+{
+"category": "mindfulness",
+"emoji": "💬",
+"title": "Check on a friend",
+"body": "Think of one friend you haven't talked to in a while. Send them a two-line message. Connection is health too.",
+"action_label": "Messaged them"
+},
+{
+"category": "mindfulness",
+"emoji": "🎯",
+"title": "One thing at a time",
+"body": "Next task: single-tab it. One thing, full attention, 25 minutes. Multitasking is just doing several things badly with extra stress.",
+"action_label": "Focusing"
+},
+{
+"category": "mindfulness",
+"emoji": "😤",
+"title": "Stressed about results?",
+"body": "Deadlines and grades are loud, but they're not the whole story of you. One deep breath, one small next step. That's all today needs.",
+"action_label": "Breathing"
+},
+{
+"category": "mindfulness",
+"emoji": "🙏",
+"title": "Shoulders check",
+"body": "Notice your shoulders right now. Up near your ears? Drop them. Unclench the jaw too. You're carrying stress you don't need to.",
+"action_label": "Dropped them"
+},
+{
+"category": "mindfulness",
+"emoji": "📓",
+"title": "Two-line journal",
+"body": "Before bed: two lines about today. What happened, how it felt. Cheapest therapy on the market.",
+"action_label": "Journaled"
+},
+{
+"category": "seasonal",
+"emoji": "🌞",
+"title": "Summer sun strategy",
+"body": "It's peak heat hours (12–3 PM). If you can, route your walks through shade or shift errands to the evening. Work smart, sweat less.",
+"action_label": "Rescheduled"
+},
+{
+"category": "seasonal",
+"emoji": "🥭",
+"title": "Mango season logic",
+"body": "Mangoes are in season and they're basically happiness with vitamins. One a day is a treat, three a day is a sugar rollercoaster. Balance!",
+"action_label": "Balanced"
+},
+{
+"category": "seasonal",
+"emoji": "🌧️",
+"title": "Monsoon immunity boost",
+"body": "Monsoon = water-borne bug season. Stick to filtered water and freshly cooked food this month, especially when eating out.",
+"action_label": "Being careful",
+"deep_dive": "Monsoon humidity and water contamination make this the peak season for stomach infections and typhoid in North India. The defence is simple: filtered or boiled water only, skip raw street salads and cut fruit left in the open, and favour hot, freshly cooked food. Wash hands before eating — the boring advice is the effective advice."
+},
+{
+"category": "seasonal",
+"emoji": "🦟",
+"title": "Mosquito hours",
+"body": "Dusk is mosquito rush hour. Long sleeves or repellent if you're out around sunset — dengue season deserves respect.",
+"action_label": "Protected"
+},
+{
+"category": "seasonal",
+"emoji": "🧣",
+"title": "Kanpur winter is coming",
+"body": "The temperature drop hits fast here. Layer up for early morning classes — being cold for 8 hours is a slow-motion energy drain.",
+"action_label": "Layered up"
+},
+{
+"category": "seasonal",
+"emoji": "🍲",
+"title": "Seasonal veggies hack",
+"body": "Whatever's cheapest at the sabzi mandi is usually what's in season — and in-season means peak nutrition. Nature's discount is real.",
+"action_label": "Good to know"
+},
+{
+"category": "seasonal",
+"emoji": "🤧",
+"title": "Weather-change alert",
+"body": "Season's turning — this is prime sniffle season around you. Extra hand-washing and decent sleep this week keeps you out of the doctor's waiting room.",
+"action_label": "On guard"
+},
+{
+"category": "seasonal",
+"emoji": "🌫️",
+"title": "Smog day advice",
+"body": "Air quality's rough today. Maybe swap the outdoor run for indoor stretches, and keep windows closed during peak hours.",
+"action_label": "Staying in"
+},
+{
+"category": "seasonal",
+"emoji": "🍵",
+"title": "Rainy day warm-up",
+"body": "Got caught in the rain? Dry off properly and grab something warm to drink. Small move, saves you a week of sneezing.",
+"action_label": "Warmed up"
+},
+{
+"category": "seasonal",
+"emoji": "🧴",
+"title": "Sunscreen isn't optional",
+"body": "Walking between departments at noon adds up. A bit of sunscreen on face and arms — your skin plays the long game even if you don't.",
+"action_label": "Applied"
+}
+]
