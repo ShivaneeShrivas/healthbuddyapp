@@ -6,7 +6,7 @@
     "backgroundColor": "#1C1526"
   },
   "server": {
-    "url": "https://YOUR-APP-NAME.onrender.com",
+    "url": "https://health-buddy-7zqc.onrender.com/",
     "cleartext": false
   }
 }
