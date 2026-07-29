@@ -1,0 +1,140 @@
+# HealthBuddy cloud APK builder
+# ------------------------------
+# Builds the real Android app (with step-sensor + screen-time plugins) on
+# GitHub's servers, so nobody needs Android Studio or big downloads locally.
+#
+# How to use (all in the browser):
+#   1. Make sure native/capacitor.config.json contains YOUR real
+#      onrender.com URL (the build stops with a clear message if not).
+#   2. GitHub → Actions tab → "Build Android APK" → Run workflow.
+#   3. Wait ~8 minutes → open the finished run → download the
+#      "HealthBuddy-APK" artifact → unzip → app-debug.apk → install.
+
+name: Build Android APK
+
+on:
+  workflow_dispatch:   # adds a manual "Run workflow" button in the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Check the app URL is configured
+        working-directory: native
+        run: |
+          if grep -q "YOUR-APP-NAME" capacitor.config.json; then
+            echo "::error::Edit native/capacitor.config.json first — replace YOUR-APP-NAME.onrender.com with your real Render URL, commit, then run this again."
+            exit 1
+          fi
+
+      - name: Bundle the HealthBuddy screens into the app
+        run: python3 native/bundle_www.py
+
+      - name: Create the Android project
+        working-directory: native
+        run: |
+          # Our plugin source files live in native/android/ in the repo, but
+          # Capacitor wants to generate a folder with that same name — so we
+          # set the sources aside first, then generate, then copy them in.
+          mv android plugin-src
+          npm install
+          npx cap add android
+
+      - name: Install the HealthBuddy sensor plugins
+        working-directory: native
+        run: |
+          cp plugin-src/StepsPlugin.java plugin-src/UsagePlugin.java plugin-src/MainActivity.java \
+             android/app/src/main/java/app/healthbuddy/
+
+      - name: Add the sensor + notification permissions to the manifest
+        working-directory: native
+        run: |
+          python3 - << 'EOF'
+          import pathlib
+          p = pathlib.Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          if "xmlns:tools" not in s:
+              s = s.replace("<manifest ", '<manifest xmlns:tools="http://schemas.android.com/tools" ', 1)
+          if "ACTIVITY_RECOGNITION" not in s:
+              s = s.replace("</manifest>",
+                  '    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'
+                  '    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />\n'
+                  '</manifest>')
+          if "POST_NOTIFICATIONS" not in s:
+              # Required on Android 13+ (API 33+) — without this declared,
+              # @capacitor/local-notifications silently fails to show
+              # anything even after the in-app permission prompt succeeds.
+              s = s.replace("</manifest>",
+                  '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+                  '</manifest>')
+          p.write_text(s)
+          print("manifest patched")
+          EOF
+
+      - name: Install the HealthBuddy app icon
+        working-directory: native
+        run: |
+          # Replace Capacitor's placeholder icon with the brand heart+sprout.
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          cp -r appicon/mipmap-* android/app/src/main/res/
+
+      - name: Verify the app is assembled correctly (fail loudly, not silently)
+        working-directory: native
+        run: |
+          set -e
+          grep -q "HB_API_BASE" www/index.html || { echo "::error::Bundled screens missing API base — native/bundle_www.py did not run properly"; exit 1; }
+          grep -q "registerPlugin(StepsPlugin.class)" android/app/src/main/java/app/healthbuddy/MainActivity.java || { echo "::error::MainActivity was not replaced — sensor plugins will be missing"; exit 1; }
+          test -f android/app/src/main/java/app/healthbuddy/StepsPlugin.java || { echo "::error::StepsPlugin.java missing from the Android project"; exit 1; }
+          grep -q "ACTIVITY_RECOGNITION" android/app/src/main/AndroidManifest.xml || { echo "::error::Manifest permissions were not added"; exit 1; }
+          grep -q "POST_NOTIFICATIONS" android/app/src/main/AndroidManifest.xml || { echo "::error::POST_NOTIFICATIONS permission missing — notifications will silently fail on Android 13+"; exit 1; }
+          echo "assembly verified: screens bundled, plugins present, permissions set"
+
+      - name: Apply the HealthBuddy app icon
+        run: python3 native/apply_icons.py
+
+      - name: Sanity-check the native plugins are in place
+        working-directory: native
+        run: |
+          test -f android/app/src/main/java/app/healthbuddy/StepsPlugin.java
+          test -f android/app/src/main/java/app/healthbuddy/UsagePlugin.java
+          grep -q "registerPlugin(StepsPlugin.class)" android/app/src/main/java/app/healthbuddy/MainActivity.java
+          grep -q "HBSteps" ../healthbuddy/static/providers.js
+          grep -q "ACTIVITY_RECOGNITION" android/app/src/main/AndroidManifest.xml
+          echo "plugins, registration, JS names and permissions all verified"
+
+      - name: Sync Capacitor
+        working-directory: native
+        run: npx cap sync android
+
+      - name: Build the APK
+        working-directory: native/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Verify the finished APK contains the bundled screens
+        working-directory: native/android
+        run: |
+          unzip -p app/build/outputs/apk/debug/app-debug.apk assets/public/index.html | grep -q "HB_API_BASE" \
+            || { echo "::error::APK does not contain the bundled screens — it would load like a browser and sensors would fail"; exit 1; }
+          echo "APK verified: screens are inside, sensor bridge guaranteed"
+
+      - name: Hand over the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HealthBuddy-APK
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
