@@ -39,6 +39,12 @@ class Config:
     # since exposing the token in the API response is not safe for production.
     EXPOSE_RESET_TOKEN = os.environ.get("HB_EXPOSE_RESET_TOKEN", "1") == "1"
 
+    # Email verification (registration OTP). Same "no email provider wired up
+    # yet" situation as password reset — see services/email.py.
+    OTP_EXPIRY_MINUTES = int(os.environ.get("HB_OTP_EXPIRY_MINUTES", "10"))
+    OTP_MAX_ATTEMPTS = int(os.environ.get("HB_OTP_MAX_ATTEMPTS", "5"))
+    EXPOSE_OTP_CODE = os.environ.get("HB_EXPOSE_OTP_CODE", "1") == "1"
+
     # Bandit tuning
     PRIOR_STRENGTH = 20          # pseudo-observations encoded from onboarding
     RECENT_CARD_WINDOW = 10      # avoid repeating the last N cards

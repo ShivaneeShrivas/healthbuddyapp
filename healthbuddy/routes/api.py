@@ -10,10 +10,11 @@ from ..auth import (device_label_from_request, hash_password, issue_refresh_toke
                     rotate_refresh_token, verify_password, verify_refresh_token)
 from ..config import CATEGORIES, CATEGORY_META
 from ..db import execute, query
-from ..services import bandit, gamification, notify, nudges, push, scheduler, segmentation, social
-from ..services.email_validate import validate_email
+from ..services import bandit, email as email_svc, gamification, notify, nudges, push, scheduler, segmentation, social
 
 api = Blueprint("api", __name__, url_prefix="/api")
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 OCCUPATIONS = {"student", "professional", "other"}
 GENDERS = {"female", "male", "nonbinary", "prefer_not"}
 ACTIVITY = {"active", "moderate", "inactive"}
@@ -35,19 +36,66 @@ def register():
     password = data.get("password") or ""
     if not name:
         return jsonify(error="Add your name so we know what to call you."), 400
-    email_ok, email_err = validate_email(email)
-    if not email_ok:
-        return jsonify(error=email_err), 400
+    if not EMAIL_RE.match(email):
+        return jsonify(error="That email doesn't look right. Check it and try again."), 400
     if len(password) < 8:
         return jsonify(error="Password needs at least 8 characters."), 400
     if query("SELECT 1 FROM users WHERE email=?", (email,), one=True):
         return jsonify(error="That email already has an account. Try signing in instead."), 409
     user_id = execute(
-        "INSERT INTO users (email, password_hash, name, buddy_code) VALUES (?,?,?,?)",
+        "INSERT INTO users (email, password_hash, name, buddy_code, email_verified) VALUES (?,?,?,?,0)",
         (email, hash_password(password), name, new_buddy_code()))
-    refresh_token = issue_refresh_token(user_id, device_label_from_request())
-    return jsonify(token=issue_token(user_id), refresh_token=refresh_token,
-                   user=_public_user(user_id)), 201
+    code = email_svc.create_otp(user_id)
+    email_svc.send_otp(email, code)
+    resp = {"ok": True, "need_verification": True, "email": email,
+            "message": "We've sent a 6-digit code to your email. Enter it below to finish creating your account."}
+    if current_app.config.get("EXPOSE_OTP_CODE"):
+        # Dev/demo convenience only, same reasoning as EXPOSE_RESET_TOKEN -
+        # no email provider is wired up yet, so this keeps the flow testable
+        # end-to-end. Turn off once real email sending is configured.
+        resp["dev_otp_code"] = code
+    return jsonify(**resp), 201
+
+
+@api.post("/auth/verify-email")
+def verify_email():
+    """Second half of registration: consumes the OTP and, on success, logs
+    the person in for the first time (same response shape as /auth/login)."""
+    data = body()
+    email = (data.get("email") or "").strip().lower()
+    code = data.get("otp") or ""
+    user = query("SELECT * FROM users WHERE email=?", (email,), one=True)
+    if user is None:
+        return jsonify(error="No account found for that email."), 404
+    if user["email_verified"]:
+        return jsonify(error="This email is already verified. Try signing in instead."), 400
+    result = email_svc.verify_otp(user["id"], code)
+    if result == "locked":
+        return jsonify(error="Too many wrong attempts. Request a new code and try again."), 429
+    if result == "expired":
+        return jsonify(error="That code has expired. Request a new one."), 400
+    if result != "ok":
+        return jsonify(error="That code isn't right. Double-check and try again."), 400
+    execute("UPDATE users SET email_verified=1 WHERE id=?", (user["id"],))
+    refresh_token = issue_refresh_token(user["id"], device_label_from_request())
+    return jsonify(token=issue_token(user["id"]), refresh_token=refresh_token,
+                   user=_public_user(user["id"]))
+
+
+@api.post("/auth/resend-otp")
+def resend_otp():
+    """Same no-enumeration pattern as /auth/forgot-password: the response
+    never reveals whether the account exists or is already verified."""
+    email = (body().get("email") or "").strip().lower()
+    generic = {"message": "If that account needs verification, a new code has been sent."}
+    user = query("SELECT * FROM users WHERE email=?", (email,), one=True)
+    if user is None or user["email_verified"]:
+        return jsonify(**generic)
+    code = email_svc.create_otp(user["id"])
+    email_svc.send_otp(email, code)
+    if current_app.config.get("EXPOSE_OTP_CODE"):
+        generic["dev_otp_code"] = code
+    return jsonify(**generic)
 
 
 @api.post("/auth/login")
@@ -57,6 +105,9 @@ def login():
                  ((data.get("email") or "").strip().lower(),), one=True)
     if user is None or not verify_password(data.get("password") or "", user["password_hash"]):
         return jsonify(error="Email and password don't match. Try again."), 401
+    if not user["email_verified"]:
+        return jsonify(error="Please verify your email before signing in.",
+                       need_verification=True, email=user["email"]), 403
     refresh_token = issue_refresh_token(user["id"], device_label_from_request())
     return jsonify(token=issue_token(user["id"]), refresh_token=refresh_token,
                    user=_public_user(user["id"]))
@@ -92,7 +143,6 @@ def forgot_password():
     provider is wired up yet (see services/email.py), so the reset link is
     logged server-side; in dev/demo mode (Config.EXPOSE_RESET_TOKEN) it's
     also returned in the response so the flow is testable end-to-end."""
-    from ..services import email as email_svc
     data = body()
     email_addr = (data.get("email") or "").strip().lower()
     user = query("SELECT * FROM users WHERE email=?", (email_addr,), one=True)
@@ -111,7 +161,6 @@ def reset_password():
     """Consumes a single-use reset token (from /auth/forgot-password) to set
     a new password. Also revokes every existing session, so a stolen device
     can't stay signed in past a password reset."""
-    from ..services import email as email_svc
     data = body()
     token, new_password = data.get("token") or "", data.get("password") or ""
     if len(new_password) < 8:
@@ -130,7 +179,8 @@ def _public_user(user_id):
             "buddy_code": u["buddy_code"], "onboarded": bool(u["onboarded"]),
             "occupation": u["occupation"], "gender": u["gender"],
             "activity_level": u["activity_level"], "health_goal": u["health_goal"],
-            "quiet_start": u["quiet_start"], "quiet_end": u["quiet_end"]}
+            "quiet_start": u["quiet_start"], "quiet_end": u["quiet_end"],
+            "email_verified": bool(u["email_verified"])}
 
 
 @api.get("/me")
