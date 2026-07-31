@@ -179,16 +179,16 @@ CREATE TABLE IF NOT EXISTS password_resets (
     used_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
-CREATE TABLE IF NOT EXISTS email_otps (
+CREATE TABLE IF NOT EXISTS login_otps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
-    code_hash TEXT NOT NULL,   -- sha256 of the 6-digit code; raw code never stored
-    attempts INTEGER NOT NULL DEFAULT 0,
+    token_hash TEXT NOT NULL,   -- sha256 of the raw 6-digit code; raw code never stored
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
     used_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_email_otps_user ON email_otps(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_login_otps_user ON login_otps(user_id);
 CREATE TABLE IF NOT EXISTS game_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -224,10 +224,9 @@ MIGRATIONS = [
     ("users", "step_goal",     "ALTER TABLE users ADD COLUMN step_goal INTEGER NOT NULL DEFAULT 8000"),
     ("users", "health_goals",  "ALTER TABLE users ADD COLUMN health_goals TEXT"),
     ("users", "notif_enabled", "ALTER TABLE users ADD COLUMN notif_enabled INTEGER NOT NULL DEFAULT 1"),
-    # DEFAULT 1 here on purpose: existing/seeded accounts stay usable as-is.
-    # register() explicitly inserts 0 for brand-new signups so only THOSE
-    # accounts are gated behind the OTP flow.
-    ("users", "email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1"),
+    # OTP-style password reset: 6-digit code instead of a long pasted token,
+    # with a per-code wrong-guess counter so a 6-digit space can't be brute-forced.
+    ("password_resets", "attempts", "ALTER TABLE password_resets ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

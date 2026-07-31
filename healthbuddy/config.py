@@ -1,10 +1,21 @@
 """Central configuration. Everything overridable via environment variables."""
 import os
+import time
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Config:
+    # Identifies exactly which deploy is running - shown at GET /api/version and
+    # used to cache-bust static assets (see templates/index.html), so "is my
+    # latest code actually live?" always has a definitive answer instead of
+    # guessing from browser behavior. Render sets RENDER_GIT_COMMIT automatically
+    # on every deploy; falls back to process-start time so it still changes on
+    # every restart even without that (e.g. running elsewhere, or locally).
+    APP_VERSION = (os.environ.get("RENDER_GIT_COMMIT", "")[:8]
+                   or os.environ.get("HB_APP_VERSION", "")
+                   or str(int(time.time())))
+
     SECRET_KEY = os.environ.get("HB_SECRET_KEY", "dev-only-change-me")
     DATABASE = os.environ.get("HB_DATABASE", os.path.join(BASE_DIR, "healthbuddy.db"))
     JWT_ALGORITHM = "HS256"
@@ -31,19 +42,35 @@ class Config:
     # The 4 daily push slots (morning/afternoon/evening/night) and their hour
     # windows live in services/notify.py (SLOTS) since they're content-adjacent.
 
-    # Password reset tokens (forgot-password flow). Short-lived and single-use.
-    RESET_TOKEN_EXPIRY_MINUTES = int(os.environ.get("HB_RESET_TOKEN_EXPIRY_MINUTES", "30"))
-    # No email provider is wired up yet, so the reset link is logged server-side
-    # (see services/email.py). Keep this on for local/dev/demo use so the flow
-    # is testable end-to-end; turn OFF once real email sending is configured,
-    # since exposing the token in the API response is not safe for production.
+    # Password reset codes (forgot-password flow). Short-lived, single-use,
+    # 6-digit OTP style codes (not long tokens) so they're easy to type.
+    RESET_TOKEN_EXPIRY_MINUTES = int(os.environ.get("HB_RESET_TOKEN_EXPIRY_MINUTES", "15"))
+    RESET_CODE_MAX_ATTEMPTS = int(os.environ.get("HB_RESET_CODE_MAX_ATTEMPTS", "5"))
+    # If a real SMTP server is configured below, the reset code is emailed
+    # and never echoed back in the API response. If SMTP is NOT configured
+    # (e.g. local dev), the code is returned in the response so the flow is
+    # still testable end-to-end without an inbox - see routes/api.py.
     EXPOSE_RESET_TOKEN = os.environ.get("HB_EXPOSE_RESET_TOKEN", "1") == "1"
 
-    # Email verification (registration OTP). Same "no email provider wired up
-    # yet" situation as password reset — see services/email.py.
-    OTP_EXPIRY_MINUTES = int(os.environ.get("HB_OTP_EXPIRY_MINUTES", "10"))
-    OTP_MAX_ATTEMPTS = int(os.environ.get("HB_OTP_MAX_ATTEMPTS", "5"))
-    EXPOSE_OTP_CODE = os.environ.get("HB_EXPOSE_OTP_CODE", "1") == "1"
+    # Email-verification-at-login: after a correct password, a 6-digit code
+    # is emailed and must be entered before tokens are issued. Uses the same
+    # SMTP settings below. Set HB_REQUIRE_LOGIN_OTP=0 to turn this step off
+    # entirely (e.g. while SMTP isn't configured yet in dev).
+    REQUIRE_LOGIN_OTP = os.environ.get("HB_REQUIRE_LOGIN_OTP", "1") == "1"
+    LOGIN_OTP_EXPIRY_MINUTES = int(os.environ.get("HB_LOGIN_OTP_EXPIRY_MINUTES", "10"))
+    LOGIN_OTP_MAX_ATTEMPTS = int(os.environ.get("HB_LOGIN_OTP_MAX_ATTEMPTS", "5"))
+    # Same fallback as password reset: if SMTP isn't configured, the code is
+    # returned in the response body instead of silently stranding the user.
+    EXPOSE_LOGIN_OTP = os.environ.get("HB_EXPOSE_LOGIN_OTP", "1") == "1"
+
+    # Outbound email (password reset codes, etc) via any SMTP+STARTTLS
+    # provider - Gmail (App Password), SendGrid, Mailgun, SES, Postmark...
+    # See services/mailer.py for exactly how these are used.
+    SMTP_HOST = os.environ.get("HB_SMTP_HOST", "")
+    SMTP_PORT = os.environ.get("HB_SMTP_PORT", "587")
+    SMTP_USER = os.environ.get("HB_SMTP_USER", "")
+    SMTP_PASS = os.environ.get("HB_SMTP_PASS", "")
+    FROM_EMAIL = os.environ.get("HB_FROM_EMAIL", "")
 
     # Bandit tuning
     PRIOR_STRENGTH = 20          # pseudo-observations encoded from onboarding

@@ -85,11 +85,13 @@ function toast(msg, cls = "") {
 
 function rewardFeedback({ xp_earned, new_badges }) {
   if (xp_earned) toast(`+${xp_earned} XP ✨`, "xp");
-  (new_badges || []).forEach((b) =>
+  (new_badges || []).forEach((b) => {
+    celebrate(b.emoji);
     modal(`<span class="big-em">${b.emoji}</span>
            <h2>Badge earned!</h2><h3>${esc(b.name)}</h3>
            <p class="muted">${esc(b.desc)}</p>
-           <button class="btn btn-primary btn-block section-gap" data-close>Nice!</button>`));
+           <button class="btn btn-primary btn-block section-gap" data-close>Nice!</button>`);
+  });
 }
 
 function modal(html) {
@@ -154,49 +156,6 @@ const LOCAL_SLOTS = [
 
 function nativeLocalNotifAvailable() {
   return !!window.Capacitor?.isNativePlatform?.() && !!window.__hbPlugin?.("LocalNotifications");
-}
-
-/* "Remind in 1h" / "Done" buttons directly on the system notification,
-   working even with the app fully closed - the whole point of this being a
-   *local* (on-device) notification rather than something that needs a
-   server round-trip to react to a tap. Registered once at script load so
-   it's ready before the very first scheduled notification can fire. */
-const LOCAL_ACTION_TYPE = "HB_NUDGE_ACTIONS";
-let _localActionsRegistered = false;
-async function ensureLocalActionTypesRegistered() {
-  if (_localActionsRegistered || !nativeLocalNotifAvailable()) return;
-  try {
-    await window.__hbPlugin("LocalNotifications").registerActionTypes({
-      types: [{ id: LOCAL_ACTION_TYPE, actions: [
-        { id: "remind", title: "Remind in 1h" },
-        { id: "done", title: "Done ✓" },
-      ] }],
-    });
-    _localActionsRegistered = true;
-  } catch (e) { console.error("[push] registerActionTypes failed:", e); }
-}
-
-if (nativeLocalNotifAvailable()) {
-  ensureLocalActionTypesRegistered();
-  // Fires when the person taps the notification body OR one of its action
-  // buttons - including a cold start from a fully-closed app, in which case
-  // Capacitor buffers the tap and delivers it as soon as this listener
-  // attaches during launch.
-  window.__hbPlugin("LocalNotifications").addListener("localNotificationActionPerformed", (event) => {
-    const notif = event.notification || {};
-    if (event.actionId === "remind") {
-      const LN = window.__hbPlugin("LocalNotifications");
-      LN.schedule({ notifications: [{
-        // Offset ID so this one-off reminder can't collide with (or get
-        // silently replaced by) the repeating daily slot it came from.
-        id: notif.id + 900, title: notif.title, body: notif.body,
-        schedule: { at: new Date(Date.now() + 60 * 60 * 1000) },
-        actionTypeId: LOCAL_ACTION_TYPE,
-      }] }).catch((e) => console.error("[push] snooze reschedule failed:", e));
-    }
-    // "done" needs no further action on-device - the notification is
-    // already dismissed by the OS the moment an action button is tapped.
-  });
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -275,12 +234,10 @@ async function enableLocalNotifs() {
         : "No worries — you can turn this on later in Profile.");
       return false;
     }
-    await ensureLocalActionTypesRegistered();
     await LN.schedule({
       notifications: LOCAL_SLOTS.map((s) => ({
         id: s.id, title: s.title, body: s.body,
         schedule: { on: { hour: s.hour, minute: s.minute }, allowWhileIdle: true },
-        actionTypeId: LOCAL_ACTION_TYPE,
       })),
     });
     toast("Notifications on 🔔 — daily nudges at set times, even with the app closed.");
@@ -386,6 +343,13 @@ views.welcome = () => {
     </div>`);
 };
 
+/* Same shape check the server enforces (routes/api.py, via email_validate.py)
+   - a fast, no-round-trip pass for obviously malformed input as the person
+   types. The server still does the real work: rejecting bad shapes outright,
+   plus a live DNS/MX lookup so a syntactically-fine but made-up domain
+   (asdf@asdf123.zzz) still gets caught on submit, not just typos. */
+const EMAIL_RE_CLIENT = /^[A-Za-z0-9](?:[A-Za-z0-9._%+-]*[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/;
+
 function authForm(mode) {
   $tabbar.classList.add("hidden");
   const isReg = mode === "register";
@@ -394,7 +358,11 @@ function authForm(mode) {
       <h1>${isReg ? "Create your account" : "Welcome back!"}</h1>
       <p class="muted" style="margin-bottom:24px">${isReg ? "Two fields and a password — that's it." : "Good to see you again."}</p>
       ${isReg ? `<div class="field"><label for="f-name">Name</label><input id="f-name" autocomplete="name"></div>` : ""}
-      <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" autocomplete="email"></div>
+      <div class="field">
+        <label for="f-email">Email</label>
+        <input id="f-email" type="email" autocomplete="email" inputmode="email">
+        <p class="field-hint" id="f-email-hint" role="alert"></p>
+      </div>
       <div class="field"><label for="f-pass">Password</label><input id="f-pass" type="password" autocomplete="${isReg ? "new-password" : "current-password"}"></div>
       ${!isReg ? `<button class="btn btn-link" id="f-forgot" type="button" style="margin:-8px 0 0">Forgot password?</button>` : ""}
       <p class="form-error" id="f-err" role="alert"></p>
@@ -402,19 +370,37 @@ function authForm(mode) {
       <button class="btn btn-ghost btn-block section-gap" data-go="${isReg ? "login" : "register"}">
         ${isReg ? "I already have an account" : "I'm new here"}</button>
     </div>`);
+
+  const $email = document.getElementById("f-email");
+  const $emailHint = document.getElementById("f-email-hint");
+  function checkEmailShape(showValid) {
+    const v = $email.value.trim();
+    if (!v) { $email.classList.remove("invalid", "valid"); $emailHint.textContent = ""; return true; }
+    const ok = EMAIL_RE_CLIENT.test(v);
+    $email.classList.toggle("invalid", !ok);
+    $email.classList.toggle("valid", ok && showValid);
+    $emailHint.textContent = ok ? "" : "That doesn't look like a real email address.";
+    return ok;
+  }
+  $email.addEventListener("input", () => checkEmailShape(false));
+  $email.addEventListener("blur", () => checkEmailShape(true));
+
   document.getElementById("f-submit").onclick = async () => {
     const err = document.getElementById("f-err");
     err.textContent = "";
+    if (!checkEmailShape(true)) { $email.focus(); return; }
     try {
-      const emailVal = document.getElementById("f-email").value;
-      const reqBody = { email: emailVal, password: document.getElementById("f-pass").value };
-      if (isReg) reqBody.name = document.getElementById("f-name").value;
-      const { res, data } = await rawApi("/auth/" + mode, { method: "POST", body: reqBody });
-      if (!res.ok) {
-        if (data.need_verification) { verifyEmailFlow(data.email || emailVal); return; }
-        throw new Error(data.error || "Something went wrong.");
+      const body = {
+        email: $email.value.trim(),
+        password: document.getElementById("f-pass").value,
+      };
+      if (isReg) body.name = document.getElementById("f-name").value;
+      const data = await api("/auth/" + mode, { method: "POST", body });
+      if (data.otp_required) {
+        toast(data.message);
+        loginOtpFlow(data.email, data.dev_otp_code || "");
+        return;
       }
-      if (data.need_verification) { verifyEmailFlow(data.email || emailVal, data.dev_otp_code); return; }
       saveSession(data);
       go(data.user.onboarded ? "home" : "onboarding");
       if (data.user.onboarded) await maybePromptForPush();
@@ -425,81 +411,89 @@ function authForm(mode) {
 views.register = () => authForm("register");
 views.login = () => authForm("login");
 
-/* --- email verification (registration OTP): one modal, chained to resend ---
-   No real email provider is configured yet (see services/email.py), so in
-   dev mode the code is returned directly and pre-filled here, same pattern
-   as the password-reset flow below - testable end-to-end without an inbox. */
-function verifyEmailFlow(email, prefillCode) {
-  modal(`<span class="big-em">📩</span>
-    <h2>Check your email</h2>
+/* --- login step 2: email OTP -------------------------------------------
+   Password already checked out server-side; this trades the emailed
+   6-digit code for the actual session tokens (/auth/login/verify-otp). */
+function loginOtpFlow(email, prefillCode) {
+  modal(`<h2>Verify it's you</h2>
     ${prefillCode
       ? `<p class="muted small">No email service is set up on this server yet, so here's your code directly.</p>`
-      : `<p class="muted small">Enter the 6-digit code we sent to <strong>${esc(email)}</strong>.</p>`}
-    <div class="field"><label for="ov-otp">6-digit code</label>
-      <input id="ov-otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" value="${esc(prefillCode || "")}"></div>
-    <p class="form-error" id="ov-err" role="alert"></p>
-    <button class="btn btn-primary btn-block section-gap" id="ov-submit">Verify & continue</button>
-    <button class="btn btn-link" id="ov-resend" type="button">Resend code</button>
+      : `<p class="muted small">Enter the 6-digit code we emailed to ${esc(email)}.</p>`}
+    <div class="field"><label for="lo-code">6-digit code</label>
+      <input id="lo-code" value="${esc(prefillCode)}" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+        style="letter-spacing:6px;font-size:22px;font-weight:800;text-align:center"></div>
+    <p class="form-error" id="lo-err" role="alert"></p>
+    <button class="btn btn-primary btn-block section-gap" id="lo-submit">Verify & sign in</button>
+    <button class="btn btn-ghost btn-block" id="lo-resend">Resend code</button>
     <button class="btn btn-ghost btn-block" data-close>Cancel</button>`);
-  document.getElementById("ov-submit").onclick = async () => {
-    const err = document.getElementById("ov-err");
+  document.getElementById("lo-code")?.focus();
+  document.getElementById("lo-submit").onclick = async () => {
+    const err = document.getElementById("lo-err");
     err.textContent = "";
     try {
-      const data = await rawApi("/auth/verify-email", {
-        method: "POST", body: { email, otp: document.getElementById("ov-otp").value },
+      const data = await rawApi("/auth/login/verify-otp", {
+        method: "POST", body: { email, code: document.getElementById("lo-code").value.trim() },
       }).then(({ res, data }) => { if (!res.ok) throw new Error(data.error || "Something went wrong."); return data; });
       document.querySelector(".modal-backdrop")?.remove();
       saveSession(data);
-      toast("Email verified 🎉");
       go(data.user.onboarded ? "home" : "onboarding");
       if (data.user.onboarded) await maybePromptForPush();
     } catch (e) { err.textContent = e.message; }
   };
-  document.getElementById("ov-resend").onclick = async () => {
-    try {
-      const data = await rawApi("/auth/resend-otp", { method: "POST", body: { email } })
-        .then(({ res, data }) => { if (!res.ok) throw new Error(data.error || "Something went wrong."); return data; });
-      toast(data.message);
-      if (data.dev_otp_code) document.getElementById("ov-otp").value = data.dev_otp_code;
-    } catch (e) { toast(e.message); }
-  };
-}
-
-/* --- forgot / reset password: two small modal steps, chained together ---
-   Step 1 collects the email and calls /auth/forgot-password. No real email
-   provider is configured yet (see services/email.py), so in dev mode the
-   response includes the reset token directly and step 2 opens right away
-   pre-filled, so the whole flow is testable without an inbox. */
-function forgotPasswordFlow() {
-  modal(`<h2>Reset your password</h2>
-    <p class="muted small">Enter your account email and we'll send you a reset link.</p>
-    <div class="field"><label for="fp-email">Email</label><input id="fp-email" type="email" autocomplete="email"></div>
-    <p class="form-error" id="fp-err" role="alert"></p>
-    <button class="btn btn-primary btn-block section-gap" id="fp-submit">Send reset link</button>
-    <button class="btn btn-ghost btn-block" data-close>Cancel</button>`);
-  document.getElementById("fp-submit").onclick = async () => {
-    const err = document.getElementById("fp-err");
+  document.getElementById("lo-resend").onclick = async () => {
+    const err = document.getElementById("lo-err");
     err.textContent = "";
     try {
-      const data = await rawApi("/auth/forgot-password", {
-        method: "POST", body: { email: document.getElementById("fp-email").value },
+      const data = await rawApi("/auth/login/resend-otp", {
+        method: "POST", body: { email },
       }).then(({ res, data }) => { if (!res.ok) throw new Error(data.error || "Something went wrong."); return data; });
-      document.querySelector(".modal-backdrop")?.remove();
-      toast(data.message);
-      resetPasswordFlow(data.dev_reset_token || "");
+      toast("New code sent.");
+      document.getElementById("lo-code").value = data.dev_otp_code || "";
     } catch (e) { err.textContent = e.message; }
   };
 }
 
-function resetPasswordFlow(prefillToken) {
-  modal(`<h2>Set a new password</h2>
-    ${prefillToken
-      ? `<p class="muted small">No email service is set up on this server yet, so here's your reset token directly.</p>`
-      : `<p class="muted small">Paste the token from your reset email below.</p>`}
-    <div class="field"><label for="rp-token">Reset token</label><input id="rp-token" value="${esc(prefillToken)}"></div>
+/* --- forgot / reset password: two small modal steps, chained together ---
+   Step 1 collects the email and calls /auth/forgot-password, which emails
+   a 6-digit code (services/mailer.py). If no SMTP provider is configured
+   yet, the dev response includes the code directly so the flow stays
+   testable without an inbox - see routes/api.py. Step 2 collects that
+   code + the new password, scoped to the same email. */
+function forgotPasswordFlow() {
+  modal(`<h2>Reset your password</h2>
+    <p class="muted small">Enter your account email and we'll send you a 6-digit code.</p>
+    <div class="field"><label for="fp-email">Email</label><input id="fp-email" type="email" autocomplete="email" inputmode="email"></div>
+    <p class="form-error" id="fp-err" role="alert"></p>
+    <button class="btn btn-primary btn-block section-gap" id="fp-submit">Send reset code</button>
+    <button class="btn btn-ghost btn-block" data-close>Cancel</button>`);
+  document.getElementById("fp-submit").onclick = async () => {
+    const err = document.getElementById("fp-err");
+    err.textContent = "";
+    const email = document.getElementById("fp-email").value.trim();
+    if (!EMAIL_RE_CLIENT.test(email)) { err.textContent = "That doesn't look like a real email address."; return; }
+    try {
+      const data = await rawApi("/auth/forgot-password", {
+        method: "POST", body: { email },
+      }).then(({ res, data }) => { if (!res.ok) throw new Error(data.error || "Something went wrong."); return data; });
+      document.querySelector(".modal-backdrop")?.remove();
+      toast(data.message);
+      resetPasswordFlow(email, data.dev_reset_code || "");
+    } catch (e) { err.textContent = e.message; }
+  };
+}
+
+function resetPasswordFlow(email, prefillCode) {
+  modal(`<h2>Enter your code</h2>
+    ${prefillCode
+      ? `<p class="muted small">No email service is set up on this server yet, so here's your code directly.</p>`
+      : `<p class="muted small">Check your inbox for a 6-digit code sent to ${esc(email)}.</p>`}
+    <div class="field"><label for="rp-code">6-digit code</label>
+      <input id="rp-code" value="${esc(prefillCode)}" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+        style="letter-spacing:6px;font-size:22px;font-weight:800;text-align:center"></div>
     <div class="field"><label for="rp-pass">New password</label><input id="rp-pass" type="password" autocomplete="new-password"></div>
     <p class="form-error" id="rp-err" role="alert"></p>
     <button class="btn btn-primary btn-block section-gap" id="rp-submit">Update password</button>
+    <button class="btn btn-ghost btn-block" id="rp-resend">Resend code</button>
     <button class="btn btn-ghost btn-block" data-close>Cancel</button>`);
   document.getElementById("rp-submit").onclick = async () => {
     const err = document.getElementById("rp-err");
@@ -507,18 +501,30 @@ function resetPasswordFlow(prefillToken) {
     try {
       const data = await rawApi("/auth/reset-password", {
         method: "POST",
-        body: { token: document.getElementById("rp-token").value, password: document.getElementById("rp-pass").value },
+        body: { email, code: document.getElementById("rp-code").value.trim(), password: document.getElementById("rp-pass").value },
       }).then(({ res, data }) => { if (!res.ok) throw new Error(data.error || "Something went wrong."); return data; });
       document.querySelector(".modal-backdrop")?.remove();
       toast(data.message || "Password updated. Please sign in again.");
       go("login");
     } catch (e) { err.textContent = e.message; }
   };
+  document.getElementById("rp-resend").onclick = async () => {
+    const err = document.getElementById("rp-err");
+    err.textContent = "";
+    try {
+      const data = await rawApi("/auth/forgot-password", {
+        method: "POST", body: { email },
+      }).then(({ res, data }) => { if (!res.ok) throw new Error(data.error || "Something went wrong."); return data; });
+      toast("New code sent.");
+      document.getElementById("rp-code").value = data.dev_reset_code || "";
+    } catch (e) { err.textContent = e.message; }
+  };
 }
 
 /* --- brand logo (reusable; swap logo.svg to rebrand everywhere at once) --- */
-const logoImg = (size) =>
-  `<img src="/static/logo.svg" width="${size}" height="${size}" alt="" class="brand-logo" aria-hidden="true">`;
+const logoImg = (size, extraClass = "", id = "") =>
+  `<img src="/static/logo.svg" width="${size}" height="${size}" alt=""` +
+  ` class="brand-logo${extraClass ? " " + extraClass : ""}"${id ? ` id="${id}"` : ""} aria-hidden="true">`;
 
 /* --- onboarding (4-step stepper) --- */
 const OB_STEPS = [
@@ -606,18 +612,53 @@ const HABITS = [
   { type: "mood", emoji: "🙂", label: "Mood", unit: "1–5", value: 4, target: 1, prompt: true, min: 1, max: 5 },
 ];
 
+/* --- Buddy: a living avatar that reflects today's score & streaks -----
+   Mood tier is purely derived from the score that's already on screen (no
+   extra state to keep in sync), and a streak of 3+ on ANY habit wraps the
+   avatar in a glowing "on fire" aura. */
+const BUDDY_CAPTIONS = {
+  sleepy: ["Still waking up… log something to give me a boost!", "Feeling a little sluggish today."],
+  okay: ["Doing alright — keep it up!", "One habit at a time, we've got this."],
+  happy: ["Feeling pretty good today! 🌿", "You're taking good care of me!"],
+  great: ["Feeling amazing today! ✨", "Fully charged and glowing! 🌟"],
+};
+const BUDDY_TAP_MESSAGES = ["👋 Hey there!", "Let's log something healthy!", "Thanks for checking on me!", "Ready when you are 🌱"];
+
+function buddyMood(pct) {
+  return pct >= 90 ? "great" : pct >= 60 ? "happy" : pct >= 25 ? "okay" : "sleepy";
+}
+
 views.home = async () => {
   showTabs("home");
   Providers.syncDeviceData?.(); // pull real device steps/screen-time when the phone allows it
   const d = await api("/dashboard");
+  renderHome(d);
+  loadDailyPlan();
+  loadActivityCard(d);
+  loadScreenTimeCard();
+};
+
+function renderHome(d) {
   const pct = d.score.score, C = 2 * Math.PI * 80;
   const hello = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
+  const onFire = Object.values(d.streaks).some((s) => s >= 3);
+  const mood = buddyMood(pct);
+  const caption = onFire
+    ? "On a streak — I'm on fire! 🔥"
+    : BUDDY_CAPTIONS[mood][Math.floor(Math.random() * BUDDY_CAPTIONS[mood].length)];
   render(`
     <div class="row-between">
       <div><h1>${hello}, ${esc(d.greeting_name)}!</h1>
       <p class="muted">Level ${d.level} · ${d.xp} XP</p></div>
-      ${logoImg(40)}
     </div>
+
+    <div class="buddy-stage">
+      <button type="button" class="buddy-aura ${onFire ? "on-fire" : ""}" id="buddy-aura" aria-label="Your HealthBuddy — tap to say hi">
+        ${logoImg(104, `buddy-avatar mood-${mood}`, "buddy-avatar-img")}
+      </button>
+      <p class="buddy-caption" id="buddy-caption">${esc(caption)}</p>
+    </div>
+
     <div class="ring-wrap"><div class="ring">
       <svg width="190" height="190" viewBox="0 0 190 190" role="img" aria-label="Today's health score: ${pct} out of 100">
         <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
@@ -640,7 +681,7 @@ views.home = async () => {
                      t.count > 0 ? "logged" : "not yet";
         const isDone = h.type === "water" ? (t.total || 0) >= h.target :
                        h.type === "meal" ? t.count >= h.target : t.count > 0;
-        return `<div class="check-row">
+        return `<div class="check-row" data-habit-row="${h.type}">
           <span class="em" aria-hidden="true">${h.emoji}</span>
           <div class="grow"><strong>${h.label}</strong>
             <span class="chip ${isDone ? "done" : ""}">${done}</span></div>
@@ -653,12 +694,12 @@ views.home = async () => {
 
     <h2 class="section-gap">Streaks 🔥</h2>
     <div class="streak-strip">
-      ${HABITS.map((h) => `<div class="streak-pill"><span aria-hidden="true">${h.emoji}</span>
+      ${HABITS.map((h) => `<div class="streak-pill ${d.streaks[h.type] >= 3 ? "hot" : ""}"><span aria-hidden="true">${h.emoji}</span>
         <div class="n">${d.streaks[h.type]}</div><div class="muted small">day${d.streaks[h.type] === 1 ? "" : "s"}</div></div>`).join("")}
     </div>`);
 
   $screen.querySelectorAll("[data-log]").forEach((btn) => {
-    btn.onclick = () => quickLog(HABITS.find((h) => h.type === btn.dataset.log));
+    btn.onclick = () => quickLog(HABITS.find((h) => h.type === btn.dataset.log), d);
   });
   $screen.querySelectorAll("[data-unlog]").forEach((btn) => btn.onclick = async () => {
     try {
@@ -667,10 +708,29 @@ views.home = async () => {
       views.home();
     } catch (e) { toast(e.message); }
   });
-  loadDailyPlan();
-  loadActivityCard(d);
-  loadScreenTimeCard();
-};
+  document.getElementById("buddy-aura")?.addEventListener("click", () => {
+    const img = document.getElementById("buddy-avatar-img");
+    if (!img) return;
+    img.classList.remove("waving", "dancing"); void img.offsetWidth; // restart animation if clicked repeatedly
+    img.classList.add(Math.random() < 0.3 ? "dancing" : "waving");
+    toast(BUDDY_TAP_MESSAGES[Math.floor(Math.random() * BUDDY_TAP_MESSAGES.length)]);
+  });
+  startBuddyIdleDance();
+}
+
+/* Buddy spontaneously does a little dance every so often while you're on
+   the home screen, so it reads as "alive" rather than a static sticker.
+   One interval total (guarded), cleared whenever we leave the home view. */
+let _buddyIdleTimer = null;
+function startBuddyIdleDance() {
+  if (_buddyIdleTimer) clearInterval(_buddyIdleTimer);
+  _buddyIdleTimer = setInterval(() => {
+    const img = document.getElementById("buddy-avatar-img");
+    if (!img || prefersReducedMotion()) return;
+    img.classList.remove("dancing"); void img.offsetWidth;
+    img.classList.add("dancing");
+  }, 14000);
+}
 
 /* --- Today's Plan: ONE task at a time, with a countdown ---------------
    Morning 6:00–12:00 · Afternoon 12:00–18:00 · Night 18:00–23:00.
@@ -847,7 +907,108 @@ async function loadInlineNudge() {
   } catch (e) { if (slot) slot.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 
-async function quickLog(h) {
+/* --- micro-interactions: a small, satisfying animation plays inside the
+   habit's own row before the dashboard refreshes, per the "Interactive
+   Logging" spec (water splash / meal power-up / sleep day-to-night /
+   mood emoji burst), plus a confetti burst if the log just hit today's
+   goal. Skips entirely under prefers-reduced-motion. --- */
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const prefersReducedMotion = () =>
+  window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function fxLayer(row) {
+  let layer = row.querySelector(".fx-layer");
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = "fx-layer";
+    row.appendChild(layer);
+  }
+  return layer;
+}
+
+function spawnFx(layer, cls, html, style) {
+  const el = document.createElement("span");
+  el.className = cls;
+  el.innerHTML = html;
+  if (style) Object.assign(el.style, style);
+  layer.appendChild(el);
+  el.addEventListener("animationend", () => el.remove(), { once: true });
+  return el;
+}
+
+function celebrate(emoji = "🎉") {
+  if (prefersReducedMotion()) return;
+  const colors = ["#FF8A5C", "#FF5C8A", "#7ED957", "#4FC3F7", "#FFD166", "#B39DFF"];
+  const layer = document.createElement("div");
+  layer.className = "celebrate-layer";
+  document.body.appendChild(layer);
+  for (let i = 0; i < 26; i++) {
+    const el = document.createElement("span");
+    el.className = "cel-confetti";
+    el.style.left = `${Math.random() * 100}%`;
+    el.style.background = colors[i % colors.length];
+    el.style.animationDuration = `${900 + Math.random() * 700}ms`;
+    el.style.animationDelay = `${Math.random() * 250}ms`;
+    layer.appendChild(el);
+  }
+  const burst = document.createElement("span");
+  burst.className = "cel-burst";
+  burst.textContent = emoji;
+  layer.appendChild(burst);
+  setTimeout(() => layer.remove(), 1700);
+}
+
+function confettiBurst(layer) {
+  const colors = ["#FF8A5C", "#FF5C8A", "#7ED957", "#4FC3F7", "#FFD166"];
+  for (let i = 0; i < 14; i++) {
+    setTimeout(() => spawnFx(layer, "fx-confetti", "", {
+      left: `${Math.random() * 100}%`,
+      background: colors[i % colors.length],
+    }), i * 18);
+  }
+}
+
+async function playLogAnimation(h, value, goalHit) {
+  const row = $screen.querySelector(`[data-habit-row="${h.type}"]`);
+  if (!row || prefersReducedMotion()) return;
+  row.classList.add(`anim-${h.type}`);
+  const layer = fxLayer(row);
+
+  if (h.type === "water") {
+    spawnFx(layer, "fx-droplet", "💧");
+    setTimeout(() => spawnFx(layer, "fx-ripple", ""), 380);
+  } else if (h.type === "meal") {
+    spawnFx(layer, "fx-plate", "🍽️", { left: "44%", top: "38%" });
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => spawnFx(layer, "fx-spark", i % 2 ? "💚" : "✨", {
+        left: `${28 + Math.random() * 44}%`, top: "55%",
+      }), 200 + i * 90);
+    }
+  } else if (h.type === "sleep") {
+    spawnFx(layer, "fx-moon", "🌙");
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => spawnFx(layer, "fx-zzz", "z".repeat(i + 1), {
+        left: `${18 + i * 16}%`, fontSize: `${12 + i * 3}px`,
+      }), 150 + i * 160);
+    }
+  } else if (h.type === "mood") {
+    const moodEmoji = ["😞", "😕", "😐", "🙂", "😄"][Math.max(0, Math.min(4, Math.round(value || 4) - 1))];
+    for (let i = 0; i < 8; i++) {
+      setTimeout(() => spawnFx(layer, "fx-emoji-burst", moodEmoji, {
+        left: `${8 + Math.random() * 82}%`, top: `${15 + Math.random() * 30}%`,
+      }), i * 45);
+    }
+    const buddyImg = document.getElementById("buddy-avatar-img");
+    if (buddyImg) {
+      buddyImg.classList.add("mood-copy");
+      setTimeout(() => buddyImg.classList.remove("mood-copy"), 900);
+    }
+  }
+  if (goalHit) confettiBurst(layer);
+  await wait(goalHit ? 950 : 650);
+}
+
+async function quickLog(h, prevDash) {
   let value = h.value;
   if (h.prompt) {
     const raw = prompt(h.type === "sleep" ? "How many hours did you sleep?" : "How's your mood, 1 (rough) to 5 (great)?", h.value);
@@ -857,6 +1018,22 @@ async function quickLog(h) {
   }
   try {
     const data = await api("/logs", { method: "POST", body: { type: h.type, value } });
+    const prevToday = (prevDash && prevDash.score.today[h.type]) || { count: 0, total: 0 };
+    let goalHit = false;
+    if (h.type === "water") {
+      const prevTotal = prevToday.total || 0;
+      goalHit = prevTotal < h.target && prevTotal + value >= h.target;
+    } else if (h.type === "meal") {
+      goalHit = prevToday.count < h.target && prevToday.count + 1 >= h.target;
+    }
+    const buddyImg = document.getElementById("buddy-avatar-img");
+    if (buddyImg) {
+      buddyImg.classList.remove("dancing"); void buddyImg.offsetWidth;
+      buddyImg.classList.add("dancing");
+    }
+    await playLogAnimation(h, value, goalHit);
+    if (goalHit) celebrate(h.emoji);
+    if (data.streak && data.streak % 7 === 0) celebrate("🔥");
     rewardFeedback(data);
     if (data.streak >= 2) toast(`${h.emoji} ${data.streak}-day ${h.label.toLowerCase()} streak!`);
     views.home();

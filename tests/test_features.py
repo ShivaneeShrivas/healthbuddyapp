@@ -24,9 +24,7 @@ class FeatureTestCase(unittest.TestCase):
     def auth(self):
         res = self.client.post("/api/auth/register",
                                json={"email": "f@example.com", "name": "Fatima", "password": "password123"})
-        otp = res.get_json()["dev_otp_code"]
-        v = self.client.post("/api/auth/verify-email", json={"email": "f@example.com", "otp": otp})
-        tok = v.get_json()["token"]
+        tok = res.get_json()["token"]
         self.client.post("/api/onboarding", headers={"Authorization": "Bearer " + tok},
                          json={"occupation": "student", "gender": "female",
                                "activity_level": "moderate", "health_goal": "general"})

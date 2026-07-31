@@ -40,7 +40,20 @@ def create_app(overrides=None):
 
     @app.get("/")
     def index():
-        return render_template("index.html")
+        resp = render_template("index.html", app_version=Config.APP_VERSION)
+        return resp, 200, {"Cache-Control": "no-cache"}  # the shell HTML must always be re-checked,
+        # so it can never itself be a stale copy pointing at old cache-busted asset URLs
+
+    @app.get("/api/version")
+    def version():
+        """Definitive way to check exactly what's deployed - compare this
+        against what you expect before assuming a bug, especially after a
+        fresh deploy. `features` flags let you confirm specific fixes are
+        actually live (e.g. the OTP password reset)."""
+        return {
+            "version": Config.APP_VERSION,
+            "features": {"otp_password_reset": True, "email_domain_validation": True},
+        }
 
     @app.get("/sw.js")
     def service_worker():

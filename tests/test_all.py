@@ -43,10 +43,7 @@ class AppTestCase(unittest.TestCase):
     def register(self, email="a@example.com", name="Asha", password="password123"):
         res = self.client.post("/api/auth/register", json={"email": email, "name": name, "password": password})
         self.assertEqual(res.status_code, 201, res.get_json())
-        otp = res.get_json()["dev_otp_code"]
-        v = self.client.post("/api/auth/verify-email", json={"email": email, "otp": otp})
-        self.assertEqual(v.status_code, 200, v.get_json())
-        return v.get_json()["token"]
+        return res.get_json()["token"]
 
     def auth(self, token):
         return {"Authorization": "Bearer " + token}
@@ -157,41 +154,33 @@ class TestAPIFlow(AppTestCase):
         res = self.client.post("/api/auth/login", json={"email": "a@example.com", "password": "wrongwrong"})
         self.assertEqual(res.status_code, 401)
 
-    def test_registration_requires_otp_verification_before_login(self):
-        res = self.client.post("/api/auth/register",
-                               json={"email": "otp@example.com", "name": "Om", "password": "password123"})
-        self.assertEqual(res.status_code, 201)
-        self.assertTrue(res.get_json()["need_verification"])
-        self.assertNotIn("token", res.get_json())  # no session until verified
-        # can't log in yet, even with the right password
-        res = self.client.post("/api/auth/login", json={"email": "otp@example.com", "password": "password123"})
-        self.assertEqual(res.status_code, 403)
-        self.assertTrue(res.get_json()["need_verification"])
+    def test_login_requires_email_otp(self):
+        self.register()
+        res = self.client.post("/api/auth/login", json={"email": "a@example.com", "password": "password123"})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("otp_required"))
+        self.assertNotIn("token", data)
+        code = data["dev_otp_code"]  # SMTP isn't configured in tests, so the code comes back directly
 
-    def test_otp_wrong_code_then_correct_code(self):
-        res = self.client.post("/api/auth/register",
-                               json={"email": "otp2@example.com", "name": "Om", "password": "password123"})
-        otp = res.get_json()["dev_otp_code"]
-        bad = self.client.post("/api/auth/verify-email", json={"email": "otp2@example.com", "otp": "000000"})
+        # wrong code is rejected, doesn't leak a token
+        bad = self.client.post("/api/auth/login/verify-otp", json={"email": "a@example.com", "code": "000000"})
         self.assertEqual(bad.status_code, 400)
-        good = self.client.post("/api/auth/verify-email", json={"email": "otp2@example.com", "otp": otp})
+
+        good = self.client.post("/api/auth/login/verify-otp", json={"email": "a@example.com", "code": code})
         self.assertEqual(good.status_code, 200)
         self.assertIn("token", good.get_json())
-        # can log in normally from now on
-        res = self.client.post("/api/auth/login", json={"email": "otp2@example.com", "password": "password123"})
-        self.assertEqual(res.status_code, 200)
 
-    def test_otp_resend_issues_new_code_and_invalidates_old(self):
-        res = self.client.post("/api/auth/register",
-                               json={"email": "otp3@example.com", "name": "Om", "password": "password123"})
-        old_otp = res.get_json()["dev_otp_code"]
-        resend = self.client.post("/api/auth/resend-otp", json={"email": "otp3@example.com"})
-        new_otp = resend.get_json()["dev_otp_code"]
-        self.assertNotEqual(old_otp, new_otp)
-        stale = self.client.post("/api/auth/verify-email", json={"email": "otp3@example.com", "otp": old_otp})
-        self.assertEqual(stale.status_code, 400)
-        fresh = self.client.post("/api/auth/verify-email", json={"email": "otp3@example.com", "otp": new_otp})
-        self.assertEqual(fresh.status_code, 200)
+        # a used code can't be replayed
+        replay = self.client.post("/api/auth/login/verify-otp", json={"email": "a@example.com", "code": code})
+        self.assertEqual(replay.status_code, 400)
+
+    def test_login_otp_can_be_disabled(self):
+        self.app.config["REQUIRE_LOGIN_OTP"] = False
+        self.register()
+        res = self.client.post("/api/auth/login", json={"email": "a@example.com", "password": "password123"})
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("token", res.get_json())
 
     def test_nudge_requires_onboarding(self):
         token = self.register()

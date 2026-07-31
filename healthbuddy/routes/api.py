@@ -10,11 +10,10 @@ from ..auth import (device_label_from_request, hash_password, issue_refresh_toke
                     rotate_refresh_token, verify_password, verify_refresh_token)
 from ..config import CATEGORIES, CATEGORY_META
 from ..db import execute, query
-from ..services import bandit, email as email_svc, gamification, notify, nudges, push, scheduler, segmentation, social
+from ..services import bandit, gamification, notify, nudges, push, scheduler, segmentation, social
+from ..services.email_validate import validate_email
 
 api = Blueprint("api", __name__, url_prefix="/api")
-
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 OCCUPATIONS = {"student", "professional", "other"}
 GENDERS = {"female", "male", "nonbinary", "prefer_not"}
 ACTIVITY = {"active", "moderate", "inactive"}
@@ -36,66 +35,19 @@ def register():
     password = data.get("password") or ""
     if not name:
         return jsonify(error="Add your name so we know what to call you."), 400
-    if not EMAIL_RE.match(email):
-        return jsonify(error="That email doesn't look right. Check it and try again."), 400
+    email_ok, email_err = validate_email(email)
+    if not email_ok:
+        return jsonify(error=email_err), 400
     if len(password) < 8:
         return jsonify(error="Password needs at least 8 characters."), 400
     if query("SELECT 1 FROM users WHERE email=?", (email,), one=True):
         return jsonify(error="That email already has an account. Try signing in instead."), 409
     user_id = execute(
-        "INSERT INTO users (email, password_hash, name, buddy_code, email_verified) VALUES (?,?,?,?,0)",
+        "INSERT INTO users (email, password_hash, name, buddy_code) VALUES (?,?,?,?)",
         (email, hash_password(password), name, new_buddy_code()))
-    code = email_svc.create_otp(user_id)
-    email_svc.send_otp(email, code)
-    resp = {"ok": True, "need_verification": True, "email": email,
-            "message": "We've sent a 6-digit code to your email. Enter it below to finish creating your account."}
-    if current_app.config.get("EXPOSE_OTP_CODE"):
-        # Dev/demo convenience only, same reasoning as EXPOSE_RESET_TOKEN -
-        # no email provider is wired up yet, so this keeps the flow testable
-        # end-to-end. Turn off once real email sending is configured.
-        resp["dev_otp_code"] = code
-    return jsonify(**resp), 201
-
-
-@api.post("/auth/verify-email")
-def verify_email():
-    """Second half of registration: consumes the OTP and, on success, logs
-    the person in for the first time (same response shape as /auth/login)."""
-    data = body()
-    email = (data.get("email") or "").strip().lower()
-    code = data.get("otp") or ""
-    user = query("SELECT * FROM users WHERE email=?", (email,), one=True)
-    if user is None:
-        return jsonify(error="No account found for that email."), 404
-    if user["email_verified"]:
-        return jsonify(error="This email is already verified. Try signing in instead."), 400
-    result = email_svc.verify_otp(user["id"], code)
-    if result == "locked":
-        return jsonify(error="Too many wrong attempts. Request a new code and try again."), 429
-    if result == "expired":
-        return jsonify(error="That code has expired. Request a new one."), 400
-    if result != "ok":
-        return jsonify(error="That code isn't right. Double-check and try again."), 400
-    execute("UPDATE users SET email_verified=1 WHERE id=?", (user["id"],))
-    refresh_token = issue_refresh_token(user["id"], device_label_from_request())
-    return jsonify(token=issue_token(user["id"]), refresh_token=refresh_token,
-                   user=_public_user(user["id"]))
-
-
-@api.post("/auth/resend-otp")
-def resend_otp():
-    """Same no-enumeration pattern as /auth/forgot-password: the response
-    never reveals whether the account exists or is already verified."""
-    email = (body().get("email") or "").strip().lower()
-    generic = {"message": "If that account needs verification, a new code has been sent."}
-    user = query("SELECT * FROM users WHERE email=?", (email,), one=True)
-    if user is None or user["email_verified"]:
-        return jsonify(**generic)
-    code = email_svc.create_otp(user["id"])
-    email_svc.send_otp(email, code)
-    if current_app.config.get("EXPOSE_OTP_CODE"):
-        generic["dev_otp_code"] = code
-    return jsonify(**generic)
+    refresh_token = issue_refresh_token(user_id, device_label_from_request())
+    return jsonify(token=issue_token(user_id), refresh_token=refresh_token,
+                   user=_public_user(user_id)), 201
 
 
 @api.post("/auth/login")
@@ -105,12 +57,59 @@ def login():
                  ((data.get("email") or "").strip().lower(),), one=True)
     if user is None or not verify_password(data.get("password") or "", user["password_hash"]):
         return jsonify(error="Email and password don't match. Try again."), 401
-    if not user["email_verified"]:
-        return jsonify(error="Please verify your email before signing in.",
-                       need_verification=True, email=user["email"]), 403
+
+    if not current_app.config["REQUIRE_LOGIN_OTP"]:
+        refresh_token = issue_refresh_token(user["id"], device_label_from_request())
+        return jsonify(token=issue_token(user["id"]), refresh_token=refresh_token,
+                       user=_public_user(user["id"]))
+
+    # Password checks out, but we don't issue tokens yet — a 6-digit code
+    # goes to the account's email first, and /auth/login/verify-otp is what
+    # actually mints the session once that code checks out.
+    from ..services import login_otp
+    code = login_otp.create_code(user["id"])
+    sent = login_otp.send_login_code(user["email"], code)
+    resp = {"otp_required": True, "email": user["email"],
+            "message": "Enter the 6-digit code we just emailed you to finish signing in."}
+    if not sent and current_app.config.get("EXPOSE_LOGIN_OTP"):
+        resp["dev_otp_code"] = code
+    return jsonify(**resp)
+
+
+@api.post("/auth/login/verify-otp")
+def login_verify_otp():
+    """Step 2 of sign-in: trade the emailed 6-digit code for real tokens."""
+    from ..services import login_otp
+    data = body()
+    email_addr = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+    user = query("SELECT * FROM users WHERE email=?", (email_addr,), one=True)
+    if user is None:
+        return jsonify(error="That code is invalid or has expired. Request a new one."), 400
+    ok, err = login_otp.verify_code(user["id"], code)
+    if not ok:
+        return jsonify(error=err), 400
     refresh_token = issue_refresh_token(user["id"], device_label_from_request())
     return jsonify(token=issue_token(user["id"]), refresh_token=refresh_token,
                    user=_public_user(user["id"]))
+
+
+@api.post("/auth/login/resend-otp")
+def login_resend_otp():
+    """Lets the person request a fresh code without re-entering their
+    password, e.g. if the first email is slow to arrive or expired."""
+    from ..services import login_otp
+    data = body()
+    email_addr = (data.get("email") or "").strip().lower()
+    user = query("SELECT * FROM users WHERE email=?", (email_addr,), one=True)
+    generic = {"message": "If that account needs a code, we've sent a new one."}
+    if user is None:
+        return jsonify(**generic)
+    code = login_otp.create_code(user["id"])
+    sent = login_otp.send_login_code(user["email"], code)
+    if not sent and current_app.config.get("EXPOSE_LOGIN_OTP"):
+        generic["dev_otp_code"] = code
+    return jsonify(**generic)
 
 
 @api.post("/auth/refresh")
@@ -138,38 +137,51 @@ def logout():
 
 @api.post("/auth/forgot-password")
 def forgot_password():
-    """Always answers with a generic success message regardless of whether
-    the email exists, to avoid leaking which emails are registered. No email
-    provider is wired up yet (see services/email.py), so the reset link is
-    logged server-side; in dev/demo mode (Config.EXPOSE_RESET_TOKEN) it's
-    also returned in the response so the flow is testable end-to-end."""
+    """Always answers with a generic success message when the email is
+    well-formed, regardless of whether an account exists for it, to avoid
+    leaking which emails are registered. The 6-digit code is emailed via
+    services/mailer.py; if no SMTP provider is configured (local/dev), it's
+    also returned in the response (Config.EXPOSE_RESET_TOKEN) so the flow
+    is testable without an inbox."""
+    from ..services import email as email_svc
+    from ..services.email_validate import validate_email
     data = body()
     email_addr = (data.get("email") or "").strip().lower()
+    email_ok, email_err = validate_email(email_addr)
+    if not email_ok:
+        return jsonify(error=email_err), 400
     user = query("SELECT * FROM users WHERE email=?", (email_addr,), one=True)
-    generic = {"message": "If an account exists for that email, a reset link has been sent."}
+    generic = {"message": "If an account exists for that email, we've sent a 6-digit reset code."}
     if user is None:
         return jsonify(**generic)
-    token = email_svc.create_reset_token(user["id"])
-    email_svc.send_password_reset(user["email"], token)
-    if current_app.config.get("EXPOSE_RESET_TOKEN"):
-        generic["dev_reset_token"] = token
+    code = email_svc.create_reset_code(user["id"])
+    sent = email_svc.send_password_reset(user["email"], code)
+    if not sent and current_app.config.get("EXPOSE_RESET_TOKEN"):
+        generic["dev_reset_code"] = code
     return jsonify(**generic)
 
 
 @api.post("/auth/reset-password")
 def reset_password():
-    """Consumes a single-use reset token (from /auth/forgot-password) to set
-    a new password. Also revokes every existing session, so a stolen device
-    can't stay signed in past a password reset."""
+    """Consumes a single-use 6-digit code (from /auth/forgot-password),
+    scoped to the account with the given email, to set a new password.
+    Also revokes every existing session, so a stolen device can't stay
+    signed in past a password reset."""
+    from ..services import email as email_svc
     data = body()
-    token, new_password = data.get("token") or "", data.get("password") or ""
+    email_addr = (data.get("email") or "").strip().lower()
+    code, new_password = (data.get("code") or "").strip(), data.get("password") or ""
     if len(new_password) < 8:
         return jsonify(error="Password must be at least 8 characters."), 400
-    user_id = email_svc.consume_reset_token(token)
-    if user_id is None:
-        return jsonify(error="That reset link is invalid or has expired. Request a new one."), 400
-    execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(new_password), user_id))
-    execute("UPDATE sessions SET revoked_at=datetime('now') WHERE user_id=? AND revoked_at IS NULL", (user_id,))
+    user = query("SELECT * FROM users WHERE email=?", (email_addr,), one=True)
+    if user is None:
+        # Same generic failure as a wrong code - never confirm account existence.
+        return jsonify(error="That code is invalid or has expired. Request a new one."), 400
+    ok, err = email_svc.verify_reset_code(user["id"], code)
+    if not ok:
+        return jsonify(error=err), 400
+    execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(new_password), user["id"]))
+    execute("UPDATE sessions SET revoked_at=datetime('now') WHERE user_id=? AND revoked_at IS NULL", (user["id"],))
     return jsonify(ok=True, message="Password updated. Please sign in again.")
 
 
@@ -179,8 +191,7 @@ def _public_user(user_id):
             "buddy_code": u["buddy_code"], "onboarded": bool(u["onboarded"]),
             "occupation": u["occupation"], "gender": u["gender"],
             "activity_level": u["activity_level"], "health_goal": u["health_goal"],
-            "quiet_start": u["quiet_start"], "quiet_end": u["quiet_end"],
-            "email_verified": bool(u["email_verified"])}
+            "quiet_start": u["quiet_start"], "quiet_end": u["quiet_end"]}
 
 
 @api.get("/me")
