@@ -3,14 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#FFF8F0">
+<meta name="theme-color" content="#1C1526" id="theme-color-meta">
 <title>HealthBuddy — your friendly health nudge companion</title>
+<script>
+  /* Applied before first paint so switching themes never flashes the old one. */
+  (function () {
+    var t = localStorage.getItem("hb_theme") || "dark";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/styles.css?v={{ app_version }}">
+<link rel="stylesheet" href="/static/styles.css">
 <link rel="icon" type="image/png" href="/static/favicon.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="manifest" href="/static/manifest.json">
-<meta name="app-version" content="{{ app_version }}">
 </head>
 <body>
 <div id="app" class="app-shell">
@@ -26,9 +33,9 @@
   <div id="toast-zone" class="toast-zone" aria-live="polite"></div>
   <div id="modal-zone"></div>
 </div>
-<script src="/static/providers.js?v={{ app_version }}"></script>
-<script src="/static/app.js?v={{ app_version }}"></script>
-<script src="/static/features.js?v={{ app_version }}"></script>
-<script>if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
+<script src="/static/providers.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/features.js"></script>
+<script>if("serviceWorker" in navigator) navigator.serviceWorker.register("/static/sw.js");</script>
 </body>
 </html>

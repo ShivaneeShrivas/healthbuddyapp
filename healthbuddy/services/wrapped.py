@@ -16,36 +16,6 @@ def _week_range(today=None):
     return start.isoformat(), end.isoformat()
 
 
-def _daily_breakdown(user_id, start, end):
-    """Per-day 0-100 scores across the week, for the mini bar chart on the
-    first Wrapped slide — same weighting as the home-screen ring, just
-    grouped by day instead of only "today"."""
-    rows = query(
-        """SELECT logged_on, type, COUNT(*) AS n, COALESCE(SUM(value),0) AS total
-           FROM habit_logs WHERE user_id=? AND logged_on BETWEEN ? AND ?
-           GROUP BY logged_on, type""", (user_id, start, end))
-    by_day = {}
-    for r in rows:
-        by_day.setdefault(r["logged_on"], {})[r["type"]] = {"n": r["n"], "total": r["total"]}
-
-    start_d = date.fromisoformat(start)
-    out = []
-    for i in range(7):
-        d = start_d + timedelta(days=i)
-        iso = d.isoformat()
-        day = by_day.get(iso, {})
-        water = min(day.get("water", {}).get("total", 0) or 0, 8)
-        meals = min(day.get("meal", {}).get("n", 0), 3)
-        sleep_hours = day.get("sleep", {}).get("total")
-        mood_logged = day.get("mood", {}).get("n", 0) > 0
-        score = round(water / 8 * 25) + round(meals / 3 * 15) \
-            + (20 if sleep_hours and 7 <= sleep_hours <= 9 else (10 if sleep_hours else 0)) \
-            + (10 if mood_logged else 0)
-        out.append({"date": iso, "weekday": d.strftime("%a")[0], "score": min(score, 100),
-                    "logged": bool(day)})
-    return out
-
-
 def build(user_id):
     start, end = _week_range()
 
@@ -97,16 +67,9 @@ def build(user_id):
                    + (20 if 7 <= avg_sleep <= 9 else 10 if avg_sleep else 0)
                    + (avg_mood / 5) * 10 + min(acted / 7, 3) * 10)
 
-    daily = _daily_breakdown(user_id, start, end)
-    best_day = max(daily, key=lambda d: d["score"]) if daily else None
-    active_days = sum(1 for d in daily if d["logged"])
-
     return {
         "range": {"start": start, "end": end},
         "health_score": health,
-        "daily": daily,
-        "best_day": best_day,
-        "active_days": active_days,
         "brain_score": brain,
         "hydration": {"glasses": water_glasses, "days": h.get("water", {"days": 0})["days"]},
         "nutrition": {"meals": meals},

@@ -369,15 +369,9 @@ views.wrapped = async () => {
   const { wrapped: w, new_badges, xp_earned } = await api("/wrapped");
   if (xp_earned) rewardFeedback({ xp_earned, new_badges });
   const range = `${new Date(w.range.start + "T00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${new Date(w.range.end + "T00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
-  const dayBars = (w.daily || []).length ? `<div class="wchart" role="img" aria-label="Daily score for the week">
-      ${w.daily.map((d) => `<div class="wbar-col"><div class="wbar" style="height:${Math.max(6, d.score)}%"></div>
-        <span class="wbar-lab">${esc(d.weekday)}</span></div>`).join("")}
-    </div>` : "";
-  const bestDayLine = w.best_day && w.best_day.score > 0
-    ? `Best day: ${new Date(w.best_day.date + "T00:00").toLocaleDateString(undefined, { weekday: "long" })} (${w.best_day.score}/100)` : range;
   const slides = [
     { bg: "linear-gradient(160deg,#FF8A5C,#FF5C8A)", emoji: "🎁", kicker: "YOUR WEEK, WRAPPED",
-      big: w.health_score, unit: "/100", label: `${w.active_days || 0}/7 active days`, extra: dayBars, foot: bestDayLine },
+      big: w.health_score, unit: "/100", label: "overall health score", foot: range },
     { bg: "linear-gradient(160deg,#B39DFF,#4FC3F7)", emoji: "🧠", kicker: "BRAIN SCORE",
       big: w.brain_score, unit: "/100", label: `${w.games.plays} mind-game sessions`,
       foot: w.games.trends.map((t) => `${t.emoji} ${t.label} ${t.trend_pct >= 0 ? "▲" : "▼"}${Math.abs(t.trend_pct)}%`).join("  ") || "play more to unlock trends" },
@@ -418,32 +412,14 @@ views.wrapped = async () => {
       ${s.list ? `<ul class="wl">${s.list.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`
         : `<div class="wb">${esc(String(s.big))}<span class="wu">${esc(s.unit || "")}</span></div>
            <div class="wlab">${esc(s.label)}</div>`}
-      ${s.extra || ""}
       <div class="wf">${esc(s.foot || "")}</div>
       <div class="wbrand">🌱 HealthBuddy</div>`;
     document.getElementById("w-dots").innerHTML =
-      slides.map((_, d) => `<button type="button" class="dot ${d === i ? "on" : ""}" data-jump="${d}" aria-label="Card ${d + 1}"></button>`).join("");
-    document.getElementById("w-dots").querySelectorAll("[data-jump]").forEach((b) =>
-      b.onclick = () => { i = +b.dataset.jump; draw(); });
+      slides.map((_, d) => `<span class="dot ${d === i ? "on" : ""}"></span>`).join("");
   };
   document.getElementById("w-prev").onclick = () => { i = (i - 1 + slides.length) % slides.length; draw(); };
   document.getElementById("w-next").onclick = () => { i = (i + 1) % slides.length; draw(); };
   document.getElementById("w-share").onclick = () => shareSlide(slides[i]);
-
-  // Swipe left/right on the card itself, like a real story deck.
-  const stage = document.getElementById("wrap-card");
-  let touchX = null;
-  stage.addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; }, { passive: true });
-  stage.addEventListener("touchend", (e) => {
-    if (touchX === null) return;
-    const dx = e.changedTouches[0].clientX - touchX;
-    if (Math.abs(dx) > 40) {
-      i = (i + (dx < 0 ? 1 : -1) + slides.length) % slides.length;
-      draw();
-    }
-    touchX = null;
-  }, { passive: true });
-
   draw();
 };
 

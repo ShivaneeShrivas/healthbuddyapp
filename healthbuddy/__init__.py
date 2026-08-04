@@ -40,33 +40,7 @@ def create_app(overrides=None):
 
     @app.get("/")
     def index():
-        resp = render_template("index.html", app_version=Config.APP_VERSION)
-        return resp, 200, {"Cache-Control": "no-cache"}  # the shell HTML must always be re-checked,
-        # so it can never itself be a stale copy pointing at old cache-busted asset URLs
-
-    @app.get("/api/version")
-    def version():
-        """Definitive way to check exactly what's deployed - compare this
-        against what you expect before assuming a bug, especially after a
-        fresh deploy. `features` flags let you confirm specific fixes are
-        actually live (e.g. the OTP password reset)."""
-        return {
-            "version": Config.APP_VERSION,
-            "features": {"otp_password_reset": True, "email_domain_validation": True},
-        }
-
-    @app.get("/sw.js")
-    def service_worker():
-        """Served from the root (not /static/sw.js) so its default scope is
-        '/' and it can actually control the whole app - a service worker
-        registered from /static/ can only ever control pages under /static/,
-        which silently breaks navigator.serviceWorker.ready on every other
-        page. See templates/index.html for the matching registration."""
-        from flask import send_from_directory
-        response = send_from_directory(app.static_folder, "sw.js")
-        response.headers["Service-Worker-Allowed"] = "/"
-        response.headers["Cache-Control"] = "no-cache"  # always fetch the latest sw.js
-        return response
+        return render_template("index.html")
 
     @app.get("/health")
     def health():

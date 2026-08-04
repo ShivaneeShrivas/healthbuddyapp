@@ -80,7 +80,8 @@ def setup(user_id, last_period_start, avg_cycle_len=28, avg_period_len=5,
                  remind=excluded.remind, gcal_export=excluded.gcal_export,
                  updated_at=datetime('now')""",
             (user_id, start.isoformat(), cycle, period, int(bool(remind)), int(bool(gcal_export))))
-    execute("INSERT OR IGNORE INTO cycle_history (user_id, start_date) VALUES (?,?)",
+    execute("INSERT INTO cycle_history (user_id, start_date) VALUES (?,?) "
+            "ON CONFLICT (user_id, start_date) DO NOTHING",
             (user_id, start.isoformat()))
 
 
@@ -92,7 +93,8 @@ def log_period_start(user_id, start_date=None):
     start = date.fromisoformat(str(start_date)) if start_date else date.today()
     if start > date.today():
         raise ValueError("That start date is in the future.")
-    execute("INSERT OR IGNORE INTO cycle_history (user_id, start_date) VALUES (?,?)",
+    execute("INSERT INTO cycle_history (user_id, start_date) VALUES (?,?) "
+            "ON CONFLICT (user_id, start_date) DO NOTHING",
             (user_id, start.isoformat()))
     # Rolling average over the gaps between the last MAX_HISTORY+1 starts.
     rows = query("""SELECT start_date FROM cycle_history WHERE user_id = ?

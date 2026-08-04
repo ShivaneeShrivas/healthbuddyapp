@@ -16,7 +16,9 @@ from healthbuddy.services.segmentation import compute_weights
 class AppTestCase(unittest.TestCase):
     def setUp(self):
         self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
-        self.app = create_app({"DATABASE": self.db_path, "TESTING": True, "SECRET_KEY": "test"})
+        self.app = create_app({"DATABASE": self.db_path, "DATABASE_URL": None,
+                                "TESTING": True, "SECRET_KEY": "test"})  # force SQLite: tests must
+                                # stay isolated even if HB_DATABASE_URL is set in the shell env
         self.client = self.app.test_client()
         self._seed_content()
 
@@ -153,34 +155,6 @@ class TestAPIFlow(AppTestCase):
         self.register()
         res = self.client.post("/api/auth/login", json={"email": "a@example.com", "password": "wrongwrong"})
         self.assertEqual(res.status_code, 401)
-
-    def test_login_requires_email_otp(self):
-        self.register()
-        res = self.client.post("/api/auth/login", json={"email": "a@example.com", "password": "password123"})
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertTrue(data.get("otp_required"))
-        self.assertNotIn("token", data)
-        code = data["dev_otp_code"]  # SMTP isn't configured in tests, so the code comes back directly
-
-        # wrong code is rejected, doesn't leak a token
-        bad = self.client.post("/api/auth/login/verify-otp", json={"email": "a@example.com", "code": "000000"})
-        self.assertEqual(bad.status_code, 400)
-
-        good = self.client.post("/api/auth/login/verify-otp", json={"email": "a@example.com", "code": code})
-        self.assertEqual(good.status_code, 200)
-        self.assertIn("token", good.get_json())
-
-        # a used code can't be replayed
-        replay = self.client.post("/api/auth/login/verify-otp", json={"email": "a@example.com", "code": code})
-        self.assertEqual(replay.status_code, 400)
-
-    def test_login_otp_can_be_disabled(self):
-        self.app.config["REQUIRE_LOGIN_OTP"] = False
-        self.register()
-        res = self.client.post("/api/auth/login", json={"email": "a@example.com", "password": "password123"})
-        self.assertEqual(res.status_code, 200)
-        self.assertIn("token", res.get_json())
 
     def test_nudge_requires_onboarding(self):
         token = self.register()

@@ -14,7 +14,9 @@ from healthbuddy.services import cycle, games, notify
 class FeatureTestCase(unittest.TestCase):
     def setUp(self):
         self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
-        self.app = create_app({"DATABASE": self.db_path, "TESTING": True, "SECRET_KEY": "test"})
+        self.app = create_app({"DATABASE": self.db_path, "DATABASE_URL": None,
+                                "TESTING": True, "SECRET_KEY": "test"})  # force SQLite: tests must
+                                # stay isolated even if HB_DATABASE_URL is set in the shell env
         self.client = self.app.test_client()
 
     def tearDown(self):
