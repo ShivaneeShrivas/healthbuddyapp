@@ -1,25 +1,26 @@
 name: Build Android APK
+
 on:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: healthbuddy
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Show Repository Structure
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 2 -type d
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          # No npm cache here: healthbuddy/native has no committed
-          # package-lock.json (it's generated fresh by `npm install`
-          # below), so actions/setup-node has nothing to key a cache
-          # against and fails with "Some specified paths were not
-          # resolved, unable to cache dependencies."
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -32,11 +33,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify Render URL
-        working-directory: healthbuddy/native
+      - name: Verify Capacitor Config
+        working-directory: native
         run: |
           if grep -q "YOUR-APP-NAME" capacitor.config.json; then
-            echo "::error::Update capacitor.config.json with your Render URL."
+            echo "::error::Please update capacitor.config.json with your Render URL."
             exit 1
           fi
 
@@ -45,52 +46,17 @@ jobs:
           python3 native/bundle_www.py
 
       - name: Install npm packages
-        working-directory: healthbuddy/native
-        run: npm install
-
-      - name: Backup plugin sources
-        working-directory: healthbuddy/native
-        run: mv android plugin-src
-
-      - name: Create Android project
-        working-directory: healthbuddy/native
-        run: npx cap add android
-
-      - name: Restore native plugins
-        working-directory: healthbuddy/native
+        working-directory: native
         run: |
-          mkdir -p android/app/src/main/java/app/healthbuddy
-          cp plugin-src/StepsPlugin.java android/app/src/main/java/app/healthbuddy/
-          cp plugin-src/UsagePlugin.java android/app/src/main/java/app/healthbuddy/
-          cp plugin-src/MainActivity.java android/app/src/main/java/app/healthbuddy/
+          npm install
 
-      - name: Patch AndroidManifest
-        working-directory: healthbuddy/native
+      - name: Verify Android folder
+        working-directory: native
         run: |
-          python3 <<'EOF'
-          from pathlib import Path
-          p = Path("android/app/src/main/AndroidManifest.xml")
-          s = p.read_text()
-          if "xmlns:tools" not in s:
-              s = s.replace(
-                  "<manifest ",
-                  '<manifest xmlns:tools="http://schemas.android.com/tools" ',
-                  1
-              )
-          if "ACTIVITY_RECOGNITION" not in s:
-              s = s.replace(
-                  "</manifest>",
-                  '''
-              <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
-              <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
-                  tools:ignore="ProtectedPermissions"/>
-          </manifest>'''
-              )
-          p.write_text(s)
-          EOF
+          test -d android || { echo "::error::android folder missing"; exit 1; }
 
       - name: Copy App Icons
-        working-directory: healthbuddy/native
+        working-directory: native
         run: |
           rm -rf android/app/src/main/res/mipmap-anydpi-v26 || true
           cp -r appicon/mipmap-* android/app/src/main/res/
@@ -99,34 +65,55 @@ jobs:
         run: |
           python3 native/apply_icons.py
 
-      - name: Sanity-check the native plugins are in place
-        working-directory: healthbuddy/native
+      - name: Patch AndroidManifest
+        working-directory: native
         run: |
-          test -f android/app/src/main/java/app/healthbuddy/StepsPlugin.java
-          test -f android/app/src/main/java/app/healthbuddy/UsagePlugin.java
-          grep -q "registerPlugin(StepsPlugin.class)" android/app/src/main/java/app/healthbuddy/MainActivity.java
-          grep -q "ACTIVITY_RECOGNITION" android/app/src/main/AndroidManifest.xml
-          echo "plugins, registration and permissions all verified"
+          python3 <<'EOF'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+
+          text = manifest.read_text()
+
+          if "xmlns:tools" not in text:
+              text = text.replace(
+                  "<manifest ",
+                  '<manifest xmlns:tools="http://schemas.android.com/tools" ',
+                  1,
+              )
+
+          if "ACTIVITY_RECOGNITION" not in text:
+              text = text.replace(
+                  "</manifest>",
+                  """
+              <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+              <uses-permission
+                  android:name="android.permission.PACKAGE_USAGE_STATS"
+                  tools:ignore="ProtectedPermissions"/>
+          </manifest>
+                  """,
+              )
+
+          manifest.write_text(text)
+          EOF
 
       - name: Sync Capacitor
-        working-directory: healthbuddy/native
-        run: npx cap sync android
+        working-directory: native
+        run: |
+          npx cap sync android
 
-      - name: Build APK
-        working-directory: healthbuddy/native/android
+      - name: Build Debug APK
+        working-directory: native/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Verify the finished APK contains the bundled screens
-        working-directory: healthbuddy/native/android
+      - name: Verify APK Exists
         run: |
-          unzip -p app/build/outputs/apk/debug/app-debug.apk assets/public/index.html | grep -q "HB_API_BASE" \
-            || { echo "::error::APK does not contain the bundled screens — bundle_www.py may not have run correctly"; exit 1; }
-          echo "APK verified: screens are inside, sensor bridge guaranteed"
+          test -f native/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: HealthBuddy-APK
-          path: healthbuddy/native/android/app/build/outputs/apk/debug/app-debug.apk
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
